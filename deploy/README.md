@@ -1,102 +1,82 @@
-# Despliegue de CekaTec / Core Manager
+# Despliegue del frontend (Core Manager)
 
-## Qué se publica en Ubuntu
+## Arquitectura real del servidor `ubuntu25`
 
-**Solo el frontend** (3 archivos): `index.html`, `tailwind.css` y `config.js`.
-La API (`CoreManager.Api.exe`, Delphi Win64) **queda en la PC Windows** porque no
-corre nativo en Linux.
+- **Easypanel** (puerto 3000) administra los servicios.
+- **Traefik** publica 80/443 y emite los certificados (lo controla Easypanel).
+- Hay un **Cloudflare Tunnel** en contenedor: los dominios entran por ahí.
+- Las otras apps Node (dashboard-app, web-teadem, articulacion-2026) corren por `pm2`
+  fuera de Docker.
 
-## Configuración de la API (`config.js`)
+Por eso el frontend se publica como **App de Easypanel** con el `Dockerfile` de este repo.
+No se toca ninguna de las apps existentes.
 
-Antes de publicar, definí a dónde va a llamar el frontend. Hay dos casos:
+## 1. API primero (queda en la PC Windows)
 
-**Caso A — nginx hace de proxy (recomendado):** el frontend y la API se ven como el
-mismo dominio, no hay CORS y no hace falta tocar nada.
+La API es un `.exe` Delphi: no corre en Linux. Se expone con un túnel de Cloudflare
+desde **la PC Windows** (no desde el servidor, que está en otra red):
 
-```js
-window.CM_API_URL = "";
+```powershell
+# 1) instalar cloudflared (una vez)
+winget install --id Cloudflare.cloudflared
+
+# 2) loguearse y crear el túnel
+cloudflared tunnel login
+cloudflared tunnel create ceka-api
+
+# 3) publicar api.ceka.com.ar -> localhost:8080
+cloudflared tunnel route dns ceka-api api.ceka.com.ar
+cloudflared tunnel run --url http://localhost:8080 ceka-api
+
+# 4) instalarlo como servicio para que arranque con Windows
+cloudflared service install
 ```
 
-```nginx
-location /api/ { proxy_pass http://IP_PC_WINDOWS:8080; }
+Verificar: `https://api.ceka.com.ar/health` debe responder `{"status":"ok",...}`.
+
+En `Backend\config.json` agregar el origen del frontend:
+
+```json
+"corsOrigenes": "http://localhost:8080,https://crm.ceka.com.ar"
 ```
 
-**Caso B — la API tiene su propio dominio:** el frontend llama directo a la API.
+## 2. Configurar el frontend
+
+En `config.js`:
 
 ```js
 window.CM_API_URL = "https://api.ceka.com.ar/api/v1";
 ```
 
-> Si el frontend se sirve por **HTTPS**, la API también debe ser **HTTPS**
-> (el navegador bloquea `http://` desde una página `https://`).
-> En ese caso hay que agregar `https://crm.ceka.com.ar` en `corsOrigenes`.
+(Si algún día el servidor puede llegar a la PC por red interna, se puede dejar vacío
+y proxear `/api/` desde el contenedor.)
 
----
+## 3. Crear la App en Easypanel
 
-## Arquitectura
+1. Entrar a `http://IP_DEL_SERVIDOR:3000`.
+2. **Create → App** (o *Project → App*), nombre `ceka-crm`.
+3. **Source**: GitHub → repositorio `CekaTecWeb-Frontend`, rama `main`.
+   - Si el repo es privado, Easypanel pide un token o deploy key.
+4. **Build**: Dockerfile (el del repo).
+5. **Port**: `80`.
+6. **Domains**: `crm.ceka.com.ar` (Easypanel crea el router de Traefik y el
+   certificado Let's Encrypt).
+7. **Deploy**.
 
-```
-Navegador → https://crm.ceka.com.ar (Ubuntu + nginx)
-                     │
-                     ├── /              → archivos estáticos (index.html, tailwind.css, config.js)
-                     └── /api/v1/...    → proxy a la PC Windows con la API (puerto 8080)
-```
+Cada `git push` a `main` se puede redeployar desde el botón **Deploy** (o activar
+*Auto Deploy* en Easypanel).
 
-La PC Windows con la API tiene que ser **alcanzable desde el Ubuntu**: misma red, VPN
-(Tailscale/WireGuard) o IP pública con el puerto restringido a la IP del servidor.
-
----
-
-## 1. Publicar el frontend
-
-```powershell
-# desde D:\CekaTecWeb
-.\deploy\publicar-frontend.ps1 -Servidor 203.0.113.10 -Usuario root -Destino /var/www/crm.ceka.com.ar
-```
-
-Copia `index.html` y `tailwind.css`. En el servidor:
+## 4. Verificación
 
 ```bash
-sudo mkdir -p /var/www/crm.ceka.com.ar
-sudo chown -R www-data:www-data /var/www/crm.ceka.com.ar
-sudo cp deploy/nginx-crm.conf /etc/nginx/sites-available/crm.ceka.com.ar
-sudo ln -s /etc/nginx/sites-available/crm.ceka.com.ar /etc/nginx/sites-enabled/
-sudo nginx -t && sudo systemctl reload nginx
-sudo certbot --nginx -d crm.ceka.com.ar     # HTTPS
+curl -I https://crm.ceka.com.ar            # 200
+curl -s https://crm.ceka.com.ar/config.js  # muestra window.CM_API_URL
+curl -s https://api.ceka.com.ar/health     # API + base de datos
 ```
 
-> Las otras 3 aplicaciones Node siguen funcionando igual: esto agrega un `server block`
-> nuevo en nginx y una carpeta nueva. No toca las existentes.
+## Alternativa sin Docker
 
----
-
-## 2. API en la PC Windows
-
-1. Editar `Backend\config.json`:
-   - `"corsOrigenes"`: dejar `https://crm.ceka.com.ar` (aunque con el proxy no se usa).
-   - `"puerto": 8080`.
-2. La API hoy arranca con la Tarea Programada **CoreManager API**. Para producción conviene
-   correrla como **servicio de Windows** (NSSM o `sc.exe`) para que se reinicie sola.
-3. Abrir el puerto 8080 **solo** para la IP del servidor Ubuntu (firewall de Windows):
-
-```powershell
-New-NetFirewallRule -DisplayName "CoreManager API (solo Ubuntu)" -Direction Inbound `
-  -Protocol TCP -LocalPort 8080 -RemoteAddress 203.0.113.10 -Action Allow
-```
-
-4. Verificar desde Ubuntu:
-
-```bash
-curl http://IP_DE_LA_PC_WINDOWS:8080/health
-```
-
-Si no hay red directa entre ambos, usar **Tailscale** (instalar en los dos y usar la IP
-`100.x.x.x` en el `proxy_pass`).
-
----
-
-## 3. Alternativa: todo en Windows
-
-Si preferís no exponer la API, se puede publicar igual que Facturomas: el propio
-`CoreManager.Api.exe` sirve el frontend (`webDir` apunta a `D:\CekaTecWeb`) y se publica
-el dominio directo a esa PC. No hace falta Ubuntu.
+En este servidor **no hay nginx en el host**, así que la publicación tiene que ser por
+Easypanel (contenedor) o agregando una cuarta app a pm2 en el puerto 3302 y una ruta en
+Traefik. El script `deploy/publicar-frontend.ps1` sirve solo si más adelante montás un
+nginx propio.
