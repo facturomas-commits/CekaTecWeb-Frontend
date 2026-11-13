@@ -1737,7 +1737,7 @@ renderAll();
   }
   function inboxRenderThread(c,borrador){
     const root=document.getElementById("inbox-thread");if(!root)return;
-    root.innerHTML=`<header class="p-4 border-b border-slate-800 flex flex-wrap justify-between gap-3 items-center"><div><h2 class="font-bold">${inboxEsc(c.participant_name||"Contacto sin nombre")}</h2><p class="text-xs text-slate-500">${inboxEsc(c.participant_id||"")} · ${inboxEsc(c.platform||"")}</p></div><div class="flex gap-2"><button class="btn btn-secondary text-xs" onclick="inboxCreateTicket()"><i class="fa-solid fa-ticket"></i> Crear ticket</button><button class="btn btn-secondary text-xs" onclick="inboxDraftAI()"><i class="fa-solid fa-wand-magic-sparkles"></i> Borrador IA</button></div></header><div id="inbox-messages" class="flex-1 p-4 space-y-3 overflow-y-auto bg-slate-950/50">${inboxState.messages.length?inboxState.messages.map(m=>`<div class="flex ${m.direction==='OUTBOUND'?'justify-end':'justify-start'}"><article class="max-w-[85%] rounded-2xl px-4 py-3 ${m.direction==='OUTBOUND'?'bg-indigo-600/25 border border-indigo-500/20':'bg-slate-900 border border-slate-800'}"><div class="text-sm whitespace-pre-wrap break-words">${inboxEsc(m.body||"(sin texto)")}</div><div class="text-[10px] text-slate-400/70 mt-2">${inboxEsc(m.sender_name||(m.direction==='OUTBOUND'?'Ceka':'Contacto'))} · ${inboxEsc(inboxFecha(m.created_at))} ${inboxEsc(m.status||"")}</div></article></div>`).join(""):'<div class="text-center text-sm text-slate-500 py-8">No hay mensajes.</div>'}</div><div class="p-3 border-t border-slate-800 space-y-2"><textarea id="inbox-reply" class="input min-h-20" maxlength="4000" placeholder="Escribí una respuesta…">${inboxEsc(borrador||"")}</textarea><div class="flex justify-between items-center gap-2"><span class="text-[10px] text-slate-500">Solo se envía al presionar Enviar.</span><button class="btn btn-primary" onclick="inboxSendReply()"><i class="fa-solid fa-paper-plane"></i> Enviar</button></div></div>`;
+    root.innerHTML=`<header class="p-4 border-b border-slate-800 flex flex-wrap justify-between gap-3 items-center"><div><h2 class="font-bold">${inboxEsc(c.participant_name||"Contacto sin nombre")}</h2><p class="text-xs text-slate-500">${inboxEsc(c.participant_id||"")} · ${inboxEsc(c.platform||"")}</p></div><div class="flex gap-2"><button class="btn btn-secondary text-xs" onclick="inboxCreateTicket()"><i class="fa-solid fa-ticket"></i> Crear ticket</button><button class="btn btn-secondary text-xs" onclick="inboxDraftAI(this)"><i class="fa-solid fa-wand-magic-sparkles"></i> Borrador IA</button></div></header><div id="inbox-messages" class="flex-1 p-4 space-y-3 overflow-y-auto bg-slate-950/50">${inboxState.messages.length?inboxState.messages.map(m=>`<div class="flex ${m.direction==='OUTBOUND'?'justify-end':'justify-start'}"><article class="max-w-[85%] rounded-2xl px-4 py-3 ${m.direction==='OUTBOUND'?'bg-indigo-600/25 border border-indigo-500/20':'bg-slate-900 border border-slate-800'}"><div class="text-sm whitespace-pre-wrap break-words">${inboxEsc(m.body||"(sin texto)")}</div><div class="text-[10px] text-slate-400/70 mt-2">${inboxEsc(m.sender_name||(m.direction==='OUTBOUND'?'Ceka':'Contacto'))} · ${inboxEsc(inboxFecha(m.created_at))} ${inboxEsc(m.status||"")}</div></article></div>`).join(""):'<div class="text-center text-sm text-slate-500 py-8">No hay mensajes.</div>'}</div><div class="p-3 border-t border-slate-800 space-y-2"><textarea id="inbox-reply" class="input min-h-20" maxlength="4000" placeholder="Escribí una respuesta…">${inboxEsc(borrador||"")}</textarea><div class="flex justify-between items-center gap-2"><span class="text-[10px] text-slate-500">Solo se envía al presionar Enviar.</span><button class="btn btn-primary" onclick="inboxSendReply()"><i class="fa-solid fa-paper-plane"></i> Enviar</button></div></div>`;
     const box=document.getElementById("inbox-messages");
     if(box)box.scrollTop=box.scrollHeight;
   }
@@ -1750,19 +1750,24 @@ renderAll();
       <form class="p-5 space-y-4" onsubmit="inboxSubmitTicket(event)"><div><label class="text-xs text-slate-400">Cliente *</label><select id="inbox-ticket-client" class="input mt-1" required><option value="">Seleccioná…</option>${opts}</select></div><div><label class="text-xs text-slate-400">Asunto *</label><input id="inbox-ticket-subject" class="input mt-1" maxlength="180" required value="${inboxEsc(title)}"></div><div><label class="text-xs text-slate-400">Descripción</label><textarea id="inbox-ticket-description" class="input mt-1 min-h-32">Mensaje de ${inboxEsc(c.participant_name||c.participant_id||"contacto")}:\n\n${inboxEsc(m.body||"")}</textarea></div><div class="grid md:grid-cols-2 gap-3"><div><label class="text-xs text-slate-400">Prioridad</label><select id="inbox-ticket-priority" class="input mt-1"><option value="NORMAL">Normal</option><option value="HIGH">Alta</option><option value="URGENT">Crítica</option><option value="LOW">Baja</option></select></div><div><label class="text-xs text-slate-400">Categoría</label><input id="inbox-ticket-category" class="input mt-1" value="WhatsApp"></div></div><div class="flex justify-end gap-2"><button type="button" class="btn btn-secondary" onclick="closeModal()">Cancelar</button><button class="btn btn-primary">Crear ticket</button></div></form>`);
   }
   async function inboxSubmitTicket(e){e.preventDefault();const b=e.submitter;try{b.disabled=true;const r=await api("/tickets",{method:"POST",body:{client_id:document.getElementById("inbox-ticket-client").value,subject:document.getElementById("inbox-ticket-subject").value.trim(),description:document.getElementById("inbox-ticket-description").value.trim(),priority:document.getElementById("inbox-ticket-priority").value,category:document.getElementById("inbox-ticket-category").value.trim()||"WhatsApp"}});closeModal();notify(`Ticket creado${r?.data?.ticket_number?": "+r.data.ticket_number:""}.`);await loadAll();}catch(err){notify(err.message||"No se pudo crear el ticket.","error");b.disabled=false;}}
-  async function inboxDraftAI(){
-    if(!inboxState.selectedId){notify("Elegí una conversación primero.","warning");return;}
-    const boton=event?.target?.closest?.("button");
-    if(boton){boton.disabled=true;boton.dataset.old=boton.innerHTML;boton.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> Generando…';}
+  async function inboxDraftAI(boton){
     try{
-      const r=await api(`/inbox/conversations/${encodeURIComponent(inboxState.selectedId)}/draft`,{method:"POST",body:{}});
-      const texto=(r?.data?.borrador||"").trim();
-      if(!texto){notify("La IA no devolvió texto.","warning");return;}
-      const area=document.getElementById("inbox-reply");
-      if(area){area.value=texto;area.focus();}
-      notify("Borrador generado. Revisalo antes de enviar.","info");
-    }catch(e){notify(e.message||"No se pudo generar el borrador.","error");}
-    finally{if(boton){boton.disabled=false;boton.innerHTML=boton.dataset.old||'<i class="fa-solid fa-wand-magic-sparkles"></i> Borrador IA';}}
+      if(!inboxState.selectedId){notify("Elegí una conversación primero.","warning");return;}
+      const b=boton instanceof HTMLElement?boton:null;
+      if(b){b.disabled=true;b.dataset.old=b.innerHTML;b.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> Generando…';}
+      try{
+        const r=await api(`/inbox/conversations/${encodeURIComponent(inboxState.selectedId)}/draft`,{method:"POST",body:{}});
+        const texto=(r?.data?.borrador||"").trim();
+        if(!texto){notify("La IA devolvió una respuesta vacía.","warning");return;}
+        const area=document.getElementById("inbox-reply");
+        if(area){area.value=texto;area.focus();}
+        notify("Borrador generado. Revisalo antes de enviar.","info");
+      }finally{
+        if(b){b.disabled=false;b.innerHTML=b.dataset.old||'<i class="fa-solid fa-wand-magic-sparkles"></i> Borrador IA';}
+      }
+    }catch(e){
+      notify(e?.message||"No se pudo generar el borrador.","error");
+    }
   }
   window.inboxRefresh=inboxRefresh;window.inboxRenderList=inboxRenderList;window.inboxSelect=inboxSelect;window.inboxSendReply=inboxSendReply;window.inboxCreateTicket=inboxCreateTicket;window.inboxSubmitTicket=inboxSubmitTicket;window.inboxDraftAI=inboxDraftAI;window.inboxPararAuto=inboxPararAuto;
 
