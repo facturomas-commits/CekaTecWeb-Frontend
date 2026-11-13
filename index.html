@@ -86,6 +86,7 @@
       <button class="nav-btn w-full text-left px-3 py-2.5 rounded-xl flex items-center gap-3" data-section="sistemas" onclick="navigate('sistemas')"><i class="fa-solid fa-server w-5"></i><span>Sistemas</span></button>
       <button class="nav-btn w-full text-left px-3 py-2.5 rounded-xl flex items-center gap-3" data-section="parque" onclick="navigate('parque')"><i class="fa-solid fa-desktop w-5"></i><span>Parque informático</span></button>
       <button class="nav-btn w-full text-left px-3 py-2.5 rounded-xl flex items-center gap-3" data-section="tickets" onclick="navigate('tickets')"><i class="fa-solid fa-ticket w-5"></i><span>Tickets / OT</span><span id="nav-ticket-count" class="ml-auto text-[10px] bg-rose-500/10 text-rose-300 px-1.5 py-0.5 rounded-full">0</span></button>
+      <button class="nav-btn w-full text-left px-3 py-2.5 rounded-xl flex items-center gap-3" data-section="inbox" onclick="navigate('inbox')"><i class="fa-solid fa-comments w-5"></i><span>Inbox</span></button>
       <button class="nav-btn w-full text-left px-3 py-2.5 rounded-xl flex items-center gap-3" data-section="servicios" onclick="navigate('servicios')"><i class="fa-solid fa-screwdriver-wrench w-5"></i><span>Servicios</span></button>
       <button class="nav-btn w-full text-left px-3 py-2.5 rounded-xl flex items-center gap-3" data-section="mantenimientos" onclick="navigate('mantenimientos')"><i class="fa-solid fa-shield-halved w-5"></i><span>Mantenimientos</span></button>
       <button class="nav-btn w-full text-left px-3 py-2.5 rounded-xl flex items-center gap-3" data-section="presupuestos" onclick="navigate('presupuestos')"><i class="fa-solid fa-file-invoice-dollar w-5"></i><span>Presupuestos</span></button>
@@ -255,6 +256,24 @@
       <div class="panel rounded-2xl overflow-hidden"><div class="overflow-x-auto"><table class="w-full text-sm"><thead class="bg-slate-900 text-[10px] uppercase text-slate-500"><tr><th class="text-left px-3 py-2">Ticket</th><th class="text-left px-3 py-2">Cliente / Equipo</th><th class="text-left px-3 py-2">Problema</th><th class="text-left px-3 py-2">Prioridad</th><th class="text-left px-3 py-2">Estado</th><th class="text-left px-3 py-2">SLA</th><th class="text-right px-2 py-2">Acción</th></tr></thead><tbody id="tickets-body"></tbody></table></div></div>
     </section>
 
+    <!-- INBOX ZERNIO -->
+    <section id="sec-inbox" class="view hidden space-y-5">
+      <div class="flex flex-col md:flex-row justify-between gap-3 items-start md:items-center">
+        <div><h1 class="text-2xl font-extrabold">Inbox de mensajes</h1><p class="text-sm text-slate-400">Conversaciones de WhatsApp y otros canales conectados a Zernio.</p></div>
+        <button class="btn btn-secondary" onclick="inboxRefresh()"><i class="fa-solid fa-rotate"></i> Actualizar</button>
+      </div>
+      <div class="grid grid-cols-1 xl:grid-cols-[340px_minmax(0,1fr)] gap-4 min-h-[65vh]">
+        <div class="panel rounded-2xl overflow-hidden flex flex-col">
+          <div class="p-3 border-b border-slate-800"><input id="inbox-search" class="input" placeholder="Buscar contacto o mensaje" oninput="inboxRenderList()"></div>
+          <div id="inbox-list" class="overflow-y-auto flex-1"><div class="p-5 text-sm text-slate-500">Cargando conversaciones…</div></div>
+        </div>
+        <div id="inbox-thread" class="panel rounded-2xl overflow-hidden flex flex-col min-h-[520px]">
+          <div class="flex-1 grid place-items-center text-slate-500 text-sm">Elegí una conversación para ver los mensajes.</div>
+        </div>
+      </div>
+      <p class="text-xs text-slate-500">La sugerencia IA será un borrador editable. No se envía sin confirmación del operador.</p>
+    </section>
+
     <!-- SERVICIOS -->
     <section id="sec-servicios" class="view hidden space-y-5">
       <div class="flex flex-col md:flex-row justify-between gap-3"><div><h1 class="text-2xl font-extrabold">Servicios y bitácora</h1><p class="text-sm text-slate-400">Ordenes, trabajos, repuestos, mano de obra y cobros.</p></div><button class="btn btn-primary" onclick="openServiceModal()"><i class="fa-solid fa-plus"></i> Nueva ficha</button></div>
@@ -373,13 +392,15 @@ function navigate(section){
   const target=document.getElementById('sec-'+section);
   if(target) target.classList.remove('hidden');
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('nav-active',b.dataset.section===section));
-  const names={dashboard:'Dashboard',clientes:'Clientes & CRM',pipeline:'Pipeline CRM',sistemas:'Sistemas',parque:'Parque informático',tickets:'Tickets / OT',servicios:'Servicios',mantenimientos:'Mantenimientos',presupuestos:'Presupuestos',inventario:'Inventario',finanzas:'Finanzas',reportes:'Reportes',configuracion:'Configuración'};
+  const names={dashboard:'Dashboard',clientes:'Clientes & CRM',pipeline:'Pipeline CRM',sistemas:'Sistemas',parque:'Parque informático',tickets:'Tickets / OT',inbox:'Inbox',servicios:'Servicios',mantenimientos:'Mantenimientos',presupuestos:'Presupuestos',inventario:'Inventario',finanzas:'Finanzas',reportes:'Reportes',configuracion:'Configuración'};
   document.getElementById('breadcrumb').textContent=names[section]||section;
   if(section==='clientes') renderClients();
   if(section==='pipeline') renderPipeline();
   if(section==='sistemas') renderSystems();
   if(section==='parque') renderEquipment();
   if(section==='tickets') renderTickets();
+  if(section==='inbox') window.inboxRefresh?.();
+  if(section==='inbox' && window.innerWidth<768) document.getElementById('inbox-thread')?.classList.add('hidden');
   if(section==='servicios') renderServices();
   if(section==='mantenimientos') renderMaintenance();
   if(section==='presupuestos') renderQuotes();
@@ -466,15 +487,17 @@ function modalHeader(icon,title,subtitle=''){
   return `<div class="p-5 border-b border-slate-800 flex items-start justify-between"><div><h3 class="font-bold text-lg"><i class="fa-solid ${icon} text-indigo-400 mr-2"></i>${title}</h3>${subtitle?`<p class="text-xs text-slate-500 mt-1">${subtitle}</p>`:''}</div><button onclick="closeModal()" class="text-slate-500 hover:text-white"><i class="fa-solid fa-xmark text-xl"></i></button></div>`;
 }
 
-function openClientModal(opportunity=false){
-  openModal(`${modalHeader('fa-building','Nuevo cliente / prospecto','Crear una ficha CRM completa')}
-  <form class="p-5 space-y-4" onsubmit="saveClient(event)">
-    <div class="grid md:grid-cols-2 gap-3">${field('Razón social / empresa','cl-name','', 'text',true,'Ej. Empresa XYZ')}${field('CUIT','cl-cuit','','text',false,'30-XXXXXXXX-X')}${field('Contacto principal','cl-contact','','text',true,'Nombre y apellido')}${field('Teléfono / WhatsApp','cl-phone','','text',false,'+54 9 ...')}${field('Email','cl-email','','email',false,'contacto@empresa.com')}${selectField('Tipo','cl-type',['Cliente','Prospecto'],opportunity?'Prospecto':'Cliente')}${field('Dirección','cl-address','','text',false,'Domicilio')}${selectField('Estado','cl-status',['Activo','Inactivo'],'Activo')}</div>
-    <div>${field('Notas','cl-notes','','text',false,'Observaciones comerciales')}</div>
-    <div class="flex justify-end gap-2 pt-2"><button type="button" class="btn btn-secondary" onclick="closeModal()">Cancelar</button><button class="btn btn-primary"><i class="fa-solid fa-check"></i> Guardar</button></div>
+function openClientModal(opportunity=false,clientId=''){
+  const c=clientId ? state.clients.find(x=>x.id===clientId) : null;
+  const val=(x)=>escapeHTML(x||'');
+  openModal(`${modalHeader('fa-building',c?'Editar cliente':'Nuevo cliente / prospecto',c?'Actualizar datos de contacto':'Crear una ficha CRM completa')}
+  <form class="p-5 space-y-4" onsubmit="saveClient(event,'${c?escapeHTML(c.id):''}')">
+    <div class="grid md:grid-cols-2 gap-3">${field('Razón social / empresa','cl-name',val(c?.name||c?.legal_name), 'text',true,'Ej. Empresa XYZ')}${field('CUIT','cl-cuit',val(c?.cuit||c?.tax_id),'text',false,'30-XXXXXXXX-X')}${field('Contacto principal','cl-contact',val(c?.contact),'text',true,'Nombre y apellido')}${field('Teléfono / WhatsApp','cl-phone',val(c?.phone||c?.mobile),'tel',false,'+54 9 ...')}${field('Email','cl-email',val(c?.email),'email',false,'contacto@empresa.com')}${selectField('Tipo','cl-type',['Cliente','Prospecto'],c?.type|| (opportunity?'Prospecto':'Cliente'))}${field('Dirección','cl-address',val(c?.address),'text',false,'Domicilio')}${selectField('Estado','cl-status',['Activo','Inactivo'],c?.status||'Activo')}</div>
+    <div>${field('Notas','cl-notes',val(c?.notes),'text',false,'Observaciones comerciales')}</div>
+    <div class="flex justify-end gap-2 pt-2"><button type="button" class="btn btn-secondary" onclick="closeModal()">Cancelar</button><button class="btn btn-primary"><i class="fa-solid fa-check"></i> ${c?'Guardar cambios':'Guardar'}</button></div>
   </form>`);
 }
-function saveClient(e){
+function saveClient(e,clientId=''){
   e.preventDefault();
   const id=uid('CLI');
   state.clients.unshift({id,name:document.getElementById('cl-name').value,commercial:document.getElementById('cl-name').value,cuit:document.getElementById('cl-cuit').value,contact:document.getElementById('cl-contact').value,phone:document.getElementById('cl-phone').value,email:document.getElementById('cl-email').value,type:document.getElementById('cl-type').value,status:document.getElementById('cl-status').value,address:document.getElementById('cl-address').value,notes:document.getElementById('cl-notes').value});
@@ -633,7 +656,7 @@ function renderClients(){
   document.getElementById('clients-body').innerHTML=rows.map(c=>{
     const count=state.equipments.filter(e=>e.clientId===c.id).length;
     const badge=c.type==='Cliente'?'emerald':'amber';
-    return `<tr class="table-row border-t border-slate-800"><td class="p-4"><div class="font-semibold">${escapeHTML(c.name)}</div><div class="text-[11px] text-slate-500">${escapeHTML(c.cuit||'Sin CUIT')}</div></td><td class="p-4">${escapeHTML(c.contact)}</td><td class="p-4 text-slate-400">${escapeHTML(c.phone)}<br><span class="text-[11px]">${escapeHTML(c.email)}</span></td><td class="p-4"><span class="px-2 py-1 rounded-lg text-[10px] bg-${badge}-500/10 text-${badge}-300 border border-${badge}-500/20">${c.type}</span></td><td class="p-4"><button onclick="filtrarPCsPorCliente('${c.id}')" class="text-indigo-300 hover:text-white">${count} equipos</button></td><td class="p-4 text-right"><div class="flex justify-end gap-1"><button class="btn btn-secondary !p-2 text-xs" onclick="openClientDrawer('${c.id}')"><i class="fa-solid fa-eye"></i></button><button class="btn btn-secondary !p-2 text-xs" onclick="filtrarPCsPorCliente('${c.id}')"><i class="fa-solid fa-desktop"></i></button><a class="btn btn-secondary !p-2 text-xs" href="https://wa.me/${(c.phone||'').replace(/\D/g,'')}" target="_blank"><i class="fa-brands fa-whatsapp"></i></a></div></td></tr>`;
+    return `<tr class="table-row border-t border-slate-800"><td class="p-4"><div class="font-semibold">${escapeHTML(c.name)}</div><div class="text-[11px] text-slate-500">${escapeHTML(c.cuit||'Sin CUIT')}</div></td><td class="p-4">${escapeHTML(c.contact)}</td><td class="p-4 text-slate-400">${escapeHTML(c.phone)}<br><span class="text-[11px]">${escapeHTML(c.email)}</span></td><td class="p-4"><span class="px-2 py-1 rounded-lg text-[10px] bg-${badge}-500/10 text-${badge}-300 border border-${badge}-500/20">${c.type}</span></td><td class="p-4"><button onclick="filtrarPCsPorCliente('${c.id}')" class="text-indigo-300 hover:text-white">${count} equipos</button></td><td class="p-4 text-right"><div class="flex justify-end gap-1"><button class="btn btn-secondary !p-2 text-xs" title="Ver ficha" onclick="openClientDrawer('${c.id}')"><i class="fa-solid fa-eye"></i></button><button class="btn btn-secondary !p-2 text-xs" title="Editar cliente" onclick="openClientModal(false,'${c.id}')"><i class="fa-solid fa-pen"></i><span class="hidden xl:inline ml-1">Editar</span></button><button class="btn btn-secondary !p-2 text-xs" onclick="filtrarPCsPorCliente('${c.id}')"><i class="fa-solid fa-desktop"></i></button><a class="btn btn-secondary !p-2 text-xs" href="https://wa.me/${(c.phone||'').replace(/\D/g,'')}" target="_blank"><i class="fa-brands fa-whatsapp"></i></a></div></td></tr>`;
   }).join('');
 }
 function filtrarPCsPorCliente(id){
@@ -1272,22 +1295,24 @@ renderAll();
 
   /* --------- Override CRUD: frontend no modifica state como fuente de verdad --------- */
 
-  window.saveClient = function(e) {
+  window.saveClient = function(e,clientId="") {
     e.preventDefault();
     const button=e.submitter;
     return safeAction(async()=>{
       const type = document.getElementById("cl-type").value === "Prospecto" ? "PROSPECT" : "COMPANY";
       const status = document.getElementById("cl-status").value === "Activo" ? "ACTIVE" : "INACTIVE";
-      await api("/clients",{method:"POST",body:{
+      const body={
         type, legal_name:document.getElementById("cl-name").value.trim(),
+        trade_name:document.getElementById("cl-name").value.trim(),
         tax_id:document.getElementById("cl-cuit").value.trim(),
         email:document.getElementById("cl-email").value.trim(),
         phone:document.getElementById("cl-phone").value.trim(),
         mobile:document.getElementById("cl-phone").value.trim(),
         address:document.getElementById("cl-address").value.trim(),
         status, notes:document.getElementById("cl-notes").value.trim()
-      }});
-      closeModal(); await loadAll(); notify("Cliente creado correctamente");
+      };
+      await api(clientId?"/clients/"+encodeURIComponent(clientId):"/clients",{method:clientId?"PUT":"POST",body});
+      closeModal(); await loadAll(); notify(clientId?"Cliente actualizado correctamente":"Cliente creado correctamente");
     },button);
   };
 
@@ -1612,6 +1637,58 @@ renderAll();
 
   window.CMLogout=()=>logout(true);
   window.CoreManagerAPI={api,login,logout,loadAll,hasPermission,get config(){return CM;}};
+  window.__cmState=state;
+  window.inboxRefresh=async()=>{};
+  window.inboxRenderList=()=>{};
+  window.inboxSelect=async()=>{};
+  window.inboxSendReply=async()=>{};
+  window.inboxCreateTicket=()=>{};
+  window.inboxSubmitTicket=async()=>{};
+  window.inboxDraftAI=()=>{};
+
+  // Inbox Zernio: conversaciones, tickets y borradores asistidos.
+  const inboxState={conversations:[],selectedId:"",messages:[]};
+  const inboxEsc=(v)=>esc(v);
+  const inboxFmt=(v)=>v?new Date(v).toLocaleString("es-AR",{dateStyle:"short",timeStyle:"short"}):"";
+  async function inboxRefresh(){
+    const root=document.getElementById("inbox-list");
+    if(!CM.token){if(root)root.innerHTML='<div class="p-5 text-sm text-amber-300">Iniciá sesión para ver las conversaciones.</div>';return;}
+    if(root)root.innerHTML='<div class="p-5 text-sm text-slate-500">Cargando conversaciones…</div>';
+    try{
+      const r=await api("/inbox/conversations"); inboxState.conversations=Array.isArray(r?.data)?r.data:[]; inboxRenderList();
+      if(inboxState.selectedId&&inboxState.conversations.some(c=>c.id===inboxState.selectedId))await inboxSelect(inboxState.selectedId);
+      else if(inboxState.conversations[0])await inboxSelect(inboxState.conversations[0].id);
+      else if(document.getElementById("inbox-thread"))document.getElementById("inbox-thread").innerHTML='<div class="flex-1 grid place-items-center text-slate-500 text-sm">Todavía no hay conversaciones.</div>';
+    }catch(e){if(root)root.innerHTML=`<div class="p-5 text-sm text-rose-300">${inboxEsc(e.message)}</div>`;}
+  }
+  function inboxRenderList(){
+    const root=document.getElementById("inbox-list");if(!root)return;
+    const q=(document.getElementById("inbox-search")?.value||"").toLowerCase();
+    const rows=inboxState.conversations.filter(c=>`${c.participant_name||""} ${c.participant_id||""} ${c.last_body||""} ${c.platform||""}`.toLowerCase().includes(q));
+    if(!rows.length){root.innerHTML='<div class="p-5 text-sm text-slate-500">No hay conversaciones.</div>';return;}
+    root.innerHTML=rows.map(c=>`<button class="w-full text-left p-4 border-b border-slate-800 hover:bg-slate-900/70 ${c.id===inboxState.selectedId?'bg-indigo-500/10':''}" onclick="inboxSelect('${inboxEsc(c.id)}')"><div class="flex justify-between gap-2"><span class="font-semibold truncate">${inboxEsc(c.participant_name||c.participant_id||"Contacto sin nombre")}</span><span class="text-[10px] uppercase text-slate-500">${inboxEsc(c.platform||"canal")}</span></div><div class="text-xs text-slate-400 mt-1 truncate">${inboxEsc(c.last_body||"Sin mensajes")}</div><div class="text-[10px] text-slate-600 mt-2">${inboxEsc(inboxFmt(c.last_message_at))}</div></button>`).join("");
+  }
+  async function inboxSelect(id){
+    inboxState.selectedId=id;inboxState.messages=[];inboxRenderList();const c=inboxState.conversations.find(x=>x.id===id),root=document.getElementById("inbox-thread");if(!c||!root)return;
+    root.innerHTML='<div class="flex-1 grid place-items-center text-slate-500">Cargando…</div>';
+    try{const r=await api(`/inbox/conversations/${encodeURIComponent(id)}/messages`);inboxState.messages=Array.isArray(r?.data)?r.data:[];inboxRenderThread(c);}catch(e){root.innerHTML=`<div class="p-5 text-rose-300">${inboxEsc(e.message)}</div>`;}
+  }
+  function inboxRenderThread(c){
+    const root=document.getElementById("inbox-thread");if(!root)return;
+    root.innerHTML=`<header class="p-4 border-b border-slate-800 flex flex-wrap justify-between gap-3 items-center"><div><h2 class="font-bold">${inboxEsc(c.participant_name||"Contacto sin nombre")}</h2><p class="text-xs text-slate-500">${inboxEsc(c.participant_id||"")} · ${inboxEsc(c.platform||"")}</p></div><div class="flex gap-2"><button class="btn btn-secondary text-xs" onclick="inboxCreateTicket()"><i class="fa-solid fa-ticket"></i> Crear ticket</button><button class="btn btn-secondary text-xs" onclick="inboxDraftAI()"><i class="fa-solid fa-wand-magic-sparkles"></i> Borrador IA</button></div></header><div id="inbox-messages" class="flex-1 p-4 md:p-6 space-y-3 overflow-y-auto bg-slate-950/50" style="max-height:58vh">${inboxState.messages.length?inboxState.messages.map(m=>`<div class="flex ${m.direction==='OUTBOUND'?'justify-end':'justify-start'}"><article class="max-w-[85%] rounded-2xl px-4 py-3 ${m.direction==='OUTBOUND'?'bg-indigo-600/25 border border-indigo-500/20':'bg-slate-900 border border-slate-800'}"><div class="text-sm whitespace-pre-wrap break-words">${inboxEsc(m.body||"(sin texto)")}</div><div class="text-[10px] text-slate-400/70 mt-2">${inboxEsc(m.sender_name||(m.direction==='OUTBOUND'?'Ceka':'Contacto'))} · ${inboxEsc(inboxFmt(m.created_at))} ${inboxEsc(m.status||"")}</div></article></div>`).join(""):'<div class="text-center text-sm text-slate-500 py-8">No hay mensajes.</div>'}</div><div class="p-3 border-t border-slate-800 space-y-2"><textarea id="inbox-reply" class="input min-h-24" maxlength="4000" placeholder="Escribí una respuesta…"></textarea><div class="flex justify-between items-center gap-2"><span class="text-[10px] text-slate-500">Solo se envía al presionar Enviar.</span><button class="btn btn-primary" onclick="inboxSendReply()"><i class="fa-solid fa-paper-plane"></i> Enviar</button></div></div>`;
+    const box=document.getElementById("inbox-messages");if(box)box.scrollTop=box.scrollHeight;
+  }
+  async function inboxSendReply(){const input=document.getElementById("inbox-reply"),text=input?.value.trim();if(!text||!inboxState.selectedId){notify("Escribí una respuesta antes de enviar.","warning");return;}if(!confirm("¿Enviar este mensaje por el canal conectado?"))return;try{await api(`/inbox/conversations/${encodeURIComponent(inboxState.selectedId)}/messages`,{method:"POST",body:{text}});notify("Respuesta enviada.");await inboxRefresh();}catch(e){notify(e.message||"No se pudo enviar.","error");}}
+  function inboxCreateTicket(){
+    const c=inboxState.conversations.find(x=>x.id===inboxState.selectedId),m=[...inboxState.messages].reverse().find(x=>x.direction==="INBOUND");if(!c||!m){notify("No hay mensaje entrante para convertir en ticket.","warning");return;}
+    const opts=(state.clients||[]).map(x=>`<option value="${inboxEsc(x.id)}">${inboxEsc(x.name||x.legal_name||"Cliente")}</option>`).join("");if(!opts){notify("No hay clientes disponibles para asociar.","warning");return;}
+    const title=(m.body||"Consulta por mensajería").replace(/\\s+/g," ").slice(0,120);
+    openModal(`${modalHeader('fa-ticket','Crear ticket desde mensaje','Seleccioná el cliente correcto')}
+      <form class="p-5 space-y-4" onsubmit="inboxSubmitTicket(event)"><div><label class="text-xs text-slate-400">Cliente *</label><select id="inbox-ticket-client" class="input mt-1" required><option value="">Seleccioná…</option>${opts}</select></div><div><label class="text-xs text-slate-400">Asunto *</label><input id="inbox-ticket-subject" class="input mt-1" maxlength="180" required value="${inboxEsc(title)}"></div><div><label class="text-xs text-slate-400">Descripción</label><textarea id="inbox-ticket-description" class="input mt-1 min-h-32">Mensaje de ${inboxEsc(c.participant_name||c.participant_id||"contacto")}:\\n\\n${inboxEsc(m.body||"")}</textarea></div><div class="grid md:grid-cols-2 gap-3"><div><label class="text-xs text-slate-400">Prioridad</label><select id="inbox-ticket-priority" class="input mt-1"><option value="NORMAL">Normal</option><option value="HIGH">Alta</option><option value="URGENT">Crítica</option><option value="LOW">Baja</option></select></div><div><label class="text-xs text-slate-400">Categoría</label><input id="inbox-ticket-category" class="input mt-1" value="WhatsApp"></div></div><div class="flex justify-end gap-2"><button type="button" class="btn btn-secondary" onclick="closeModal()">Cancelar</button><button class="btn btn-primary">Crear ticket</button></div></form>`);
+  }
+  async function inboxSubmitTicket(e){e.preventDefault();const b=e.submitter;try{b.disabled=true;const r=await api("/tickets",{method:"POST",body:{client_id:document.getElementById("inbox-ticket-client").value,subject:document.getElementById("inbox-ticket-subject").value.trim(),description:document.getElementById("inbox-ticket-description").value.trim(),priority:document.getElementById("inbox-ticket-priority").value,category:document.getElementById("inbox-ticket-category").value.trim()||"WhatsApp"}});closeModal();notify(`Ticket creado${r?.data?.ticket_number?": "+r.data.ticket_number:""}.`);await loadAll();}catch(err){notify(err.message||"No se pudo crear el ticket.","error");b.disabled=false;}}
+  function inboxDraftAI(){notify("La IA DeepSeek aún requiere configurar su clave privada en el backend. No se enviarán respuestas automáticas.","info");}
+  window.inboxRefresh=inboxRefresh;window.inboxRenderList=inboxRenderList;window.inboxSelect=inboxSelect;window.inboxSendReply=inboxSendReply;window.inboxCreateTicket=inboxCreateTicket;window.inboxSubmitTicket=inboxSubmitTicket;window.inboxDraftAI=inboxDraftAI;
 
   async function boot() {
     addBackendChrome();
