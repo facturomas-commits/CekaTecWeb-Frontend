@@ -649,6 +649,10 @@ function renderSystems(){
   }).join('');
 }
 
+function esPortalUI(){
+  const u = window.CoreManagerAPI && window.CoreManagerAPI.config && window.CoreManagerAPI.config.user;
+  return !!(u && u.client_id);
+}
 function renderEquipment(){
   const search=(document.getElementById('equipment-search')?.value||'').toLowerCase();
   const cf=document.getElementById('equipment-client-filter')?.value||'ALL';
@@ -665,11 +669,50 @@ function renderEquipment(){
     box.innerHTML=`<div class="grid md:grid-cols-2 xl:grid-cols-3 gap-4">${arr.map(e=>equipmentCard(e)).join('')}</div>`;
   }
 }
+function etiquetaTipo(t){ const m = {PC:"Computadora de escritorio",NOTEBOOK:"Notebook",SERVER:"Servidor",PRINTER:"Impresora",ROUTER:"Router",OTHER:"Otro equipo"}; return m[t] || "Equipo"; }
 function equipmentCard(e){
-  const ok=e.status==='Al Día', bc=ok?'emerald':'amber';
-  return `<div class="panel rounded-2xl p-5 hover:border-slate-700 transition"><div class="flex justify-between items-start"><span class="font-mono text-[10px] bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 px-2 py-1 rounded-lg">${escapeHTML(e.code)}</span><span class="text-[10px] px-2 py-1 rounded-lg bg-${bc}-500/10 text-${bc}-300 border border-${bc}-500/20">${e.status}</span></div><div class="mt-3"><h3 class="font-bold">${escapeHTML(e.name)}</h3><p class="text-xs text-slate-500 mt-1"><i class="fa-solid fa-building mr-1"></i>${escapeHTML(clientName(e.clientId))} · ${escapeHTML(e.location)}</p></div><div class="grid grid-cols-2 gap-2 mt-4 text-xs"><div class="bg-slate-900 rounded-xl p-2.5"><span class="text-slate-500">CPU</span><div class="mt-1 font-medium">${escapeHTML(e.cpu)}</div></div><div class="bg-slate-900 rounded-xl p-2.5"><span class="text-slate-500">RAM</span><div class="mt-1 font-medium">${escapeHTML(e.ram)}</div></div><div class="bg-slate-900 rounded-xl p-2.5"><span class="text-slate-500">Disco</span><div class="mt-1 font-medium">${escapeHTML(e.disk)}</div></div><div class="bg-slate-900 rounded-xl p-2.5"><span class="text-slate-500">IP</span><div class="mt-1 font-mono">${escapeHTML(e.ip)}</div></div></div><div class="flex items-center justify-between mt-4 pt-3 border-t border-slate-800 text-[11px] text-slate-500"><span>Último: ${escapeHTML(e.lastMaintenance)}</span><button onclick="openEquipmentDrawer('${e.id}')" class="text-indigo-300 hover:text-white font-semibold">Historial <i class="fa-solid fa-arrow-right ml-1"></i></button></div><div class="grid grid-cols-3 gap-2 mt-3"><button class="btn btn-secondary text-[11px] !p-2" onclick="openEquipmentDrawer('${e.id}')"><i class="fa-solid fa-clock-rotate-left"></i> Bitácora</button><button class="btn btn-primary text-[11px] !p-2" onclick="openMaintenanceModal('${e.id}')"><i class="fa-solid fa-plus"></i> Mant.</button><button class="btn btn-secondary text-[11px] !p-2" onclick="openEquipmentQR('${e.id}')"><i class="fa-solid fa-qrcode"></i> QR</button></div></div>`;
+  const ok = e.status === 'Al Día', bc = ok ? 'emerald' : 'amber';
+  const portal = esPortalUI();
+  const subtitulo = portal ? (e.location || etiquetaTipo(e.type)) : (clientName(e.clientId) + " · " + (e.location || ""));
+  const botonMant = portal ? '' :
+    '<button class="btn btn-primary text-[11px] !p-2" onclick="openMaintenanceModal(\'' + e.id + '\')"><i class="fa-solid fa-plus"></i> Mant.</button>';
+  return `<div class="panel rounded-2xl p-5 hover:border-slate-700 transition">
+    <div class="flex justify-between items-start">
+      <span class="font-mono text-[10px] bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 px-2 py-1 rounded-lg">${escapeHTML(e.code)}</span>
+      <span class="text-[10px] px-2 py-1 rounded-lg bg-${bc}-500/10 text-${bc}-300 border border-${bc}-500/20">${e.status}</span>
+    </div>
+    <div class="mt-3"><h3 class="font-bold">${escapeHTML(e.name)}</h3>
+      <p class="text-xs text-slate-500 mt-1"><i class="fa-solid fa-building mr-1"></i>${escapeHTML(subtitulo)}</p></div>
+    <div class="grid grid-cols-2 gap-2 mt-4 text-xs">
+      <div class="bg-slate-900 rounded-xl p-2.5"><span class="text-slate-500">CPU</span><div class="mt-1 font-medium">${escapeHTML(e.cpu)}</div></div>
+      <div class="bg-slate-900 rounded-xl p-2.5"><span class="text-slate-500">RAM</span><div class="mt-1 font-medium">${escapeHTML(e.ram)}</div></div>
+      <div class="bg-slate-900 rounded-xl p-2.5"><span class="text-slate-500">Disco</span><div class="mt-1 font-medium">${escapeHTML(e.disk)}</div></div>
+      <div class="bg-slate-900 rounded-xl p-2.5"><span class="text-slate-500">IP</span><div class="mt-1 font-mono">${escapeHTML(e.ip)}</div></div>
+    </div>
+    <div class="flex items-center justify-between mt-4 pt-3 border-t border-slate-800 text-[11px] text-slate-500">
+      <span>Último: ${escapeHTML(e.lastMaintenance)}</span>
+      <button onclick="openEquipmentDrawer('${e.id}')" class="text-indigo-300 hover:text-white font-semibold">Historial <i class="fa-solid fa-arrow-right ml-1"></i></button>
+    </div>
+    <div class="grid ${portal ? 'grid-cols-2' : 'grid-cols-3'} gap-2 mt-3">
+      <button class="btn btn-secondary text-[11px] !p-2" onclick="openEquipmentDrawer('${e.id}')"><i class="fa-solid fa-clock-rotate-left"></i> Bitácora</button>
+      ${botonMant}
+      <button class="btn btn-secondary text-[11px] !p-2" onclick="openEquipmentQR('${e.id}')"><i class="fa-solid fa-qrcode"></i> QR</button>
+    </div>
+  </div>`;
 }
-function equipmentRow(e){return `<tr class="table-row border-t border-slate-800"><td class="p-4 font-mono text-indigo-300">${escapeHTML(e.code)}</td><td class="p-4"><b>${escapeHTML(e.name)}</b><div class="text-[11px] text-slate-500">${escapeHTML(e.location)}</div></td><td class="p-4">${escapeHTML(clientName(e.clientId))}</td><td class="p-4 text-xs">${escapeHTML(e.cpu)}<br><span class="text-slate-500">${escapeHTML(e.ram)}</span></td><td class="p-4 font-mono text-xs">${escapeHTML(e.ip)}</td><td class="p-4"><span class="text-xs ${e.status==='Al Día'?'text-emerald-300':'text-amber-300'}">${e.status}</span></td><td class="p-4 text-right"><button class="btn btn-secondary !p-2 text-xs" onclick="openEquipmentDrawer('${e.id}')"><i class="fa-solid fa-clock-rotate-left"></i></button> <button class="btn btn-primary !p-2 text-xs" onclick="openMaintenanceModal('${e.id}')"><i class="fa-solid fa-plus"></i></button></td></tr>`;}
+function equipmentRow(e){
+  const botonMant = esPortalUI() ? '' : '<button class="btn btn-primary !p-2 text-xs" onclick="openMaintenanceModal(\'' + e.id + '\')"><i class="fa-solid fa-plus"></i></button>';
+  const cliente = esPortalUI() ? escapeHTML(e.location || "") : escapeHTML(clientName(e.clientId));
+  return `<tr class="table-row border-t border-slate-800">
+    <td class="p-4 font-mono text-indigo-300">${escapeHTML(e.code)}</td>
+    <td class="p-4"><b>${escapeHTML(e.name)}</b><div class="text-[11px] text-slate-500">${escapeHTML(e.location)}</div></td>
+    <td class="p-4">${cliente}</td>
+    <td class="p-4 text-xs">${escapeHTML(e.cpu)}<br><span class="text-slate-500">${escapeHTML(e.ram)}</span></td>
+    <td class="p-4 font-mono text-xs">${escapeHTML(e.ip)}</td>
+    <td class="p-4"><span class="text-xs ${e.status === 'Al Día' ? 'text-emerald-300' : 'text-amber-300'}">${e.status}</span></td>
+    <td class="p-4 text-right"><button class="btn btn-secondary !p-2 text-xs" onclick="openEquipmentDrawer('${e.id}')"><i class="fa-solid fa-clock-rotate-left"></i></button> ${botonMant}</td>
+  </tr>`;
+}
 
 function openEquipmentDrawer(id){
   drawerEquipmentId=id;
@@ -1510,7 +1553,7 @@ renderAll();
           </div>
           <form id="cm-login-form" class="panel rounded-2xl p-6 space-y-4">
             <div><label class="text-xs text-slate-400">Email</label>
-              <input id="cm-login-email" type="email" class="input mt-1" value="admin@coremanager.local" required>
+              <input id="cm-login-email" type="email" class="input mt-1" placeholder="tu@empresa.com" autocomplete="username" required>
             </div>
             <div><label class="text-xs text-slate-400">Contraseña</label>
               <input id="cm-login-password" type="password" class="input mt-1" value="" required>
@@ -2653,7 +2696,7 @@ renderAll();
           '<select id="tk-client" class="input mt-1" required>' + cl + '</select></div>' +
           field('Título', 'tk-title', '', 'text', true, 'Problema a resolver') +
           selectField('Prioridad', 'tk-priority', ['Baja','Normal','Alta','Crítica'], 'Normal') + '</div>' +
-          '<div>' + field('Descripción', 'tk-desc', '', 'text', true, 'Detalle del incidente') + '</div>' +
+          '<div><label class="text-xs text-slate-400">Descripción *</label><textarea id="tk-desc" class="input mt-1" rows="4" required placeholder="Detalle del incidente"></textarea></div>' +
           '<div class="flex justify-end gap-2"><button type="button" class="btn btn-secondary" onclick="closeModal()">Cancelar</button>' +
           '<button class="btn btn-primary">Crear ticket</button></div></form>');
       return;
@@ -2669,7 +2712,7 @@ renderAll();
         '</div>' +
         '<div><label class="text-xs text-slate-400">Equipo afectado (opcional)</label>' +
         '<select id="tk-equipment" class="input mt-1"><option value="">— Sin equipo —</option>' + eqs + '</select></div>' +
-        '<div>' + field('Descripción', 'tk-desc', '', 'text', true, 'Detalle del problema') + '</div>' +
+        '<div><label class="text-xs text-slate-400">Descripción *</label><textarea id="tk-desc" class="input mt-1" rows="4" required placeholder="Contanos qué pasó, qué mensaje aparece y desde cuándo."></textarea></div>' +
         '<div class="text-[11px] text-slate-500"><i class="fa-solid fa-circle-info mr-1"></i>' +
         'El ticket se abre a nombre de ' + escapeHTML(u.client_name || "tu empresa") + '.</div>' +
         '<div class="flex justify-end gap-2"><button type="button" class="btn btn-secondary" onclick="closeModal()">Cancelar</button>' +
@@ -3635,6 +3678,16 @@ renderAll();
     const abierto = ["RESOLVED","CLOSED","CANCELLED"].indexOf(t.status) < 0;
     const opcionesEstado = Object.keys(ESTADOS).map(k =>
       '<option value="' + k + '" ' + (k === t.status ? "selected" : "") + '>' + ESTADOS[k] + '</option>').join("");
+    // El portal del cliente no cambia estados, no asigna ni edita: solo consulta y responde
+    const esClientePortal = !!(window.CoreManagerAPI.config.user && window.CoreManagerAPI.config.user.client_id);
+    const usuarioActual = (window.CoreManagerAPI && window.CoreManagerAPI.config.user || {}).username || "";
+    const nombreAutor = (username) => {
+      if (!username) return "Sistema";
+      if (esClientePortal) return username === usuarioActual ? "Vos" : "Soporte CekaTec";
+      const usr = (state.users || []).find(x => x.username === username);
+      const nombre = usr ? ((usr.first_name || "") + " " + (usr.last_name || "")).trim() : "";
+      return nombre || username;
+    };
 
     const conversacion = comentarios.length
       ? comentarios.map(c => {
@@ -3643,7 +3696,7 @@ renderAll();
               ? 'border-amber-500/30 bg-amber-500/5'
               : 'border-slate-800 bg-slate-900') + '">' +
             '<div class="flex justify-between text-[10px] text-slate-500 mb-1">' +
-              '<span><b class="text-slate-300">' + esc(c.username || "Sistema") + '</b>' +
+              '<span><b class="text-slate-300">' + esc(nombreAutor(c.username)) + '</b>' +
               (interno ? ' <span class="text-amber-300">· nota interna</span>' : '') + '</span>' +
               '<span>' + esc(fechaCorta(c.created_at)) + '</span>' +
             '</div>' +
@@ -3667,17 +3720,18 @@ renderAll();
           '<span class="text-[10px] px-2 py-1 rounded-lg bg-slate-800 text-slate-300">' + esc(ESTADOS[t.status] || t.status || "") + '</span>' +
           (abierto ? '<span class="text-[10px] px-2 py-1 rounded-lg bg-emerald-500/10 text-emerald-300">SLA ' + esc(fechaCorta(t.sla_due_at)) + '</span>' : '') +
         '</div>' +
+        (esClientePortal ? '' :
         '<div class="grid grid-cols-2 gap-2 mt-3">' +
           '<select id="vt-status" class="input !py-1.5 text-xs" onchange="ticketSetStatus(\'' + id + '\', this.value).then(()=>verTicket(\'' + id + '\'))">' + opcionesEstado + '</select>' +
           '<button class="btn btn-secondary text-xs" onclick="ticketAssign(\'' + id + '\')"><i class="fa-solid fa-user-plus"></i> Asignar</button>' +
           '<button class="btn btn-secondary text-xs" onclick="enviarTicket(\'' + id + '\')"><i class="fa-solid fa-paper-plane"></i> Enviar</button>' +
           '<button class="btn btn-secondary text-xs" onclick="editarTicket(\'' + id + '\')"><i class="fa-solid fa-pen"></i> Editar</button>' +
-        '</div>' +
+        '</div>') +
       '</div>' +
       '<div class="p-5 space-y-5">' +
         '<div class="grid grid-cols-2 gap-2 text-xs">' +
           '<div class="bg-slate-900 rounded-xl p-3"><span class="text-[10px] text-slate-500 block">Creado</span>' + esc(fechaCorta(t.created_at)) + '</div>' +
-          '<div class="bg-slate-900 rounded-xl p-3"><span class="text-[10px] text-slate-500 block">Asignado a</span>' + esc(t.assigned_username || "Sin asignar") + '</div>' +
+          '<div class="bg-slate-900 rounded-xl p-3"><span class="text-[10px] text-slate-500 block">Asignado a</span>' + esc(esClientePortal ? (t.assigned_username ? "Soporte CekaTec" : "Sin asignar") : (t.assigned_username || "Sin asignar")) + '</div>' +
           '<div class="bg-slate-900 rounded-xl p-3"><span class="text-[10px] text-slate-500 block">Categoría</span>' + esc(t.category || "—") + '</div>' +
           '<div class="bg-slate-900 rounded-xl p-3"><span class="text-[10px] text-slate-500 block">Vencimiento SLA</span>' + esc(fechaCorta(t.sla_due_at)) + '</div>' +
         '</div>' +
@@ -3688,12 +3742,13 @@ renderAll();
           '<div class="space-y-2">' + conversacion + '</div></div>' +
         '<div class="border-t border-slate-800 pt-4">' +
           '<h3 class="font-bold text-sm mb-2">Responder</h3>' +
-          '<textarea id="vt-reply" class="input text-sm" rows="3" placeholder="Escribí la respuesta al cliente..."></textarea>' +
+          '<textarea id="vt-reply" class="input text-sm" rows="3" placeholder="Escribí tu respuesta..."></textarea>' +
+          (esClientePortal ? '' :
           '<label class="flex items-center gap-2 text-[11px] text-slate-400 mt-2">' +
-            '<input type="checkbox" id="vt-internal" class="accent-indigo-600"> Nota interna (no se envía al cliente)</label>' +
+            '<input type="checkbox" id="vt-internal" class="accent-indigo-600"> Nota interna (no se envía al cliente)</label>') +
           '<div class="flex gap-2 mt-3">' +
             '<button class="btn btn-primary flex-1 text-xs" onclick="responderTicket(\'' + id + '\', false)"><i class="fa-solid fa-reply"></i> Responder</button>' +
-            '<button class="btn btn-secondary text-xs" onclick="responderTicket(\'' + id + '\', true)"><i class="fa-solid fa-paper-plane"></i> Responder y enviar por email</button>' +
+            (esClientePortal ? '' : '<button class="btn btn-secondary text-xs" onclick="responderTicket(\'' + id + '\', true)"><i class="fa-solid fa-paper-plane"></i> Responder y enviar por email</button>') +
           '</div>' +
         '</div>' +
         (puede("TICKETS_DELETE")
