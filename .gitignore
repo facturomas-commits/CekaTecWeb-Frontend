@@ -1,0 +1,12 @@
+# Dependencias (Tailwind se instala con npm)
+node_modules/
+
+# Backups
+*.zip
+*.7z
+*.rar
+
+# Sistema
+Thumbs.db
+desktop.ini
+.DS_Store
