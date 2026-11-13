@@ -1,20 +1,16 @@
 /* ============================================================
    CONFIGURACIÓN DE DESPLIEGUE
-   Este archivo NO se compila: se edita según dónde se publique
-   el frontend.
+   Define a qué API llama el frontend.
 
-   - Si el frontend y la API comparten el mismo dominio
-     (por ejemplo nginx con proxy /api hacia la PC Windows),
-     dejar la cadena vacía:
+   - En local (localhost / 127.0.0.1): cadena vacía = mismo origen.
+     La API sirve la página y responde en /api/v1.
+   - Publicado (crm.ceka.com.ar): usa el túnel de Cloudflare
+     que expone la API de la PC Windows como api.ceka.com.ar.
 
-        window.CM_API_URL = "https://api.ceka.com.ar/api/v1";
-
-   - Si el frontend se publica en Ubuntu y la API queda en otra
-     máquina con su propio dominio, poner la URL completa:
-
-        window.CM_API_URL = "https://api.ceka.com.ar/api/v1";
-
-   Nota: si el frontend se sirve por HTTPS, la API también debe
-   ser HTTPS (el navegador bloquea llamadas a http:// desde https://).
+   Si algún día el frontend y la API comparten dominio (proxy),
+   alcanza con dejar la cadena vacía en ambos casos.
    ============================================================ */
-window.CM_API_URL = "https://api.ceka.com.ar/api/v1";
+(function () {
+  var local = location.hostname === "localhost" || location.hostname === "127.0.0.1";
+  window.CM_API_URL = local ? "" : "https://api.ceka.com.ar/api/v1";
+})();
