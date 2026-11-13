@@ -1725,6 +1725,8 @@ renderAll();
     const root=document.getElementById("inbox-thread");if(!root)return;
     const borrador=conservar?(document.getElementById("inbox-reply")?.value||""):"";
     if(!conservar)root.innerHTML='<div class="p-10 text-center text-slate-500 text-sm">Cargando mensajes…</div>';
+    // Espejo: se sincroniza con Zernio antes de mostrar, para no quedar desfasados.
+    try{await api(`/inbox/conversations/${encodeURIComponent(c.id)}/sync`,{method:"POST",body:{}});}catch(_){}
     try{
       const r=await api(`/inbox/conversations/${encodeURIComponent(c.id)}/messages`);
       const nuevos=Array.isArray(r?.data)?r.data:[];
