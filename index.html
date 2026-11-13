@@ -55,6 +55,13 @@
     .mobile-hide { display:none!important; }
     .main-content { padding-bottom:6rem; }
   }
+
+  /* Inbox: dos columnas en pantalla ancha, una sola en mobile */
+  .inbox-grid { display:grid; grid-template-columns:1fr; gap:1rem; align-items:start; }
+  @media (min-width: 1280px) { .inbox-grid { grid-template-columns: 360px minmax(0,1fr); } }
+  .inbox-scroll { max-height: 62vh; }
+  .inbox-col-thread { min-height: 520px; }
+  #inbox-messages { max-height: 44vh; }
 </style>
 </head>
 
@@ -262,12 +269,12 @@
         <div><h1 class="text-2xl font-extrabold">Inbox de mensajes</h1><p class="text-sm text-slate-400">Conversaciones de WhatsApp y otros canales conectados a Zernio.</p></div>
         <button class="btn btn-secondary" onclick="inboxRefresh()"><i class="fa-solid fa-rotate"></i> Actualizar</button>
       </div>
-      <div class="grid grid-cols-1 xl:grid-cols-[340px_minmax(0,1fr)] gap-4 min-h-[65vh]">
-        <div class="panel rounded-2xl overflow-hidden flex flex-col">
+      <div class="inbox-grid">
+        <div class="panel rounded-2xl overflow-hidden flex flex-col inbox-col-list">
           <div class="p-3 border-b border-slate-800"><input id="inbox-search" class="input" placeholder="Buscar contacto o mensaje" oninput="inboxRenderList()"></div>
-          <div id="inbox-list" class="overflow-y-auto flex-1"><div class="p-5 text-sm text-slate-500">Cargando conversaciones…</div></div>
+          <div id="inbox-list" class="overflow-y-auto flex-1 inbox-scroll"><div class="p-5 text-sm text-slate-500">Cargando conversaciones…</div></div>
         </div>
-        <div id="inbox-thread" class="panel rounded-2xl overflow-hidden flex flex-col min-h-[520px]">
+        <div id="inbox-thread" class="panel rounded-2xl overflow-hidden flex flex-col inbox-col-thread">
           <div class="flex-1 grid place-items-center text-slate-500 text-sm">Elegí una conversación para ver los mensajes.</div>
         </div>
       </div>
@@ -400,6 +407,7 @@ function navigate(section){
   if(section==='parque') renderEquipment();
   if(section==='tickets') renderTickets();
   if(section==='inbox') window.inboxRefresh?.();
+  if(section!=='inbox') window.inboxPararAuto?.();
   if(section==='inbox' && window.innerWidth<768) document.getElementById('inbox-thread')?.classList.add('hidden');
   if(section==='servicios') renderServices();
   if(section==='mantenimientos') renderMaintenance();
@@ -1647,20 +1655,57 @@ renderAll();
   window.inboxDraftAI=()=>{};
 
   // Inbox Zernio: conversaciones, tickets y borradores asistidos.
-  const inboxState={conversations:[],selectedId:"",messages:[]};
+  const inboxState={conversations:[],selectedId:"",messages:[],stamp:"",timer:null,busy:false};
   const inboxEsc=(v)=>esc(v);
-  const inboxFmt=(v)=>v?new Date(v).toLocaleString("es-AR",{dateStyle:"short",timeStyle:"short"}):"";
+  // Zernio devuelve "-03"; JS necesita "-03:00" para no dar Invalid Date.
+  const inboxFecha=(v)=>{
+    if(!v)return "";
+    let s=String(v).trim();
+    if(/[+-]\d{2}$/.test(s)) s+=":00";
+    const d=new Date(s);
+    return Number.isNaN(d.getTime())?String(v):d.toLocaleString("es-AR",{dateStyle:"short",timeStyle:"short"});
+  };
+  const inboxFmt=inboxFecha;
   async function inboxRefresh(){
     const root=document.getElementById("inbox-list");
     if(!CM.token){if(root)root.innerHTML='<div class="p-5 text-sm text-amber-300">Iniciá sesión para ver las conversaciones.</div>';return;}
-    if(root)root.innerHTML='<div class="p-5 text-sm text-slate-500">Cargando conversaciones…</div>';
+    if(root&&!inboxState.conversations.length)root.innerHTML='<div class="p-5 text-sm text-slate-500">Cargando conversaciones…</div>';
     try{
-      const r=await api("/inbox/conversations"); inboxState.conversations=Array.isArray(r?.data)?r.data:[]; inboxRenderList();
-      if(inboxState.selectedId&&inboxState.conversations.some(c=>c.id===inboxState.selectedId))await inboxSelect(inboxState.selectedId);
+      const r=await api("/inbox/conversations");
+      inboxState.conversations=Array.isArray(r?.data)?r.data:[];
+      inboxRenderList();
+      const actual=inboxState.conversations.find(c=>c.id===inboxState.selectedId);
+      if(actual){inboxState.stamp=`${actual.last_message_at}|${actual.last_body}`;await inboxCargarMensajes(actual,true);}
       else if(inboxState.conversations[0])await inboxSelect(inboxState.conversations[0].id);
-      else if(document.getElementById("inbox-thread"))document.getElementById("inbox-thread").innerHTML='<div class="flex-1 grid place-items-center text-slate-500 text-sm">Todavía no hay conversaciones.</div>';
-    }catch(e){if(root)root.innerHTML=`<div class="p-5 text-sm text-rose-300">${inboxEsc(e.message)}</div>`;}
+      else if(root)root.innerHTML='<div class="p-5 text-sm text-slate-500">No hay conversaciones.</div>';
+    }catch(e){if(root&&!inboxState.conversations.length)root.innerHTML=`<div class="p-5 text-sm text-rose-300">${inboxEsc(e.message)}</div>`;}
+    inboxIniciarAuto();
   }
+  // Refresco silencioso: no borra lo que el operador está escribiendo.
+  async function inboxSync(){
+    if(inboxState.busy||!CM.token)return;
+    inboxState.busy=true;
+    try{
+      const r=await api("/inbox/conversations");
+      const lista=Array.isArray(r?.data)?r.data:[];
+      inboxState.conversations=lista;
+      inboxRenderList();
+      const actual=lista.find(c=>c.id===inboxState.selectedId);
+      if(actual){
+        const sello=`${actual.last_message_at}|${actual.last_body}`;
+        if(sello!==inboxState.stamp){inboxState.stamp=sello;await inboxCargarMensajes(actual,true);}
+      }else if(lista[0])await inboxSelect(lista[0].id);
+    }catch(_){/* silencioso: se reintenta en el próximo ciclo */}
+    finally{inboxState.busy=false;}
+  }
+  function inboxIniciarAuto(){
+    inboxPararAuto();
+    inboxState.timer=setInterval(()=>{
+      const sec=document.getElementById("sec-inbox");
+      if(sec&&!sec.classList.contains("hidden"))inboxSync();
+    },8000);
+  }
+  function inboxPararAuto(){if(inboxState.timer){clearInterval(inboxState.timer);inboxState.timer=null;}}
   function inboxRenderList(){
     const root=document.getElementById("inbox-list");if(!root)return;
     const q=(document.getElementById("inbox-search")?.value||"").toLowerCase();
@@ -1669,26 +1714,57 @@ renderAll();
     root.innerHTML=rows.map(c=>`<button class="w-full text-left p-4 border-b border-slate-800 hover:bg-slate-900/70 ${c.id===inboxState.selectedId?'bg-indigo-500/10':''}" onclick="inboxSelect('${inboxEsc(c.id)}')"><div class="flex justify-between gap-2"><span class="font-semibold truncate">${inboxEsc(c.participant_name||c.participant_id||"Contacto sin nombre")}</span><span class="text-[10px] uppercase text-slate-500">${inboxEsc(c.platform||"canal")}</span></div><div class="text-xs text-slate-400 mt-1 truncate">${inboxEsc(c.last_body||"Sin mensajes")}</div><div class="text-[10px] text-slate-600 mt-2">${inboxEsc(inboxFmt(c.last_message_at))}</div></button>`).join("");
   }
   async function inboxSelect(id){
-    inboxState.selectedId=id;inboxState.messages=[];inboxRenderList();const c=inboxState.conversations.find(x=>x.id===id),root=document.getElementById("inbox-thread");if(!c||!root)return;
-    root.innerHTML='<div class="flex-1 grid place-items-center text-slate-500">Cargando…</div>';
-    try{const r=await api(`/inbox/conversations/${encodeURIComponent(id)}/messages`);inboxState.messages=Array.isArray(r?.data)?r.data:[];inboxRenderThread(c);}catch(e){root.innerHTML=`<div class="p-5 text-rose-300">${inboxEsc(e.message)}</div>`;}
+    inboxState.selectedId=id;
+    inboxRenderList();
+    const c=inboxState.conversations.find(x=>x.id===id);
+    if(!c)return;
+    inboxState.stamp=`${c.last_message_at}|${c.last_body}`;
+    await inboxCargarMensajes(c,false);
   }
-  function inboxRenderThread(c){
+  async function inboxCargarMensajes(c,conservar){
     const root=document.getElementById("inbox-thread");if(!root)return;
-    root.innerHTML=`<header class="p-4 border-b border-slate-800 flex flex-wrap justify-between gap-3 items-center"><div><h2 class="font-bold">${inboxEsc(c.participant_name||"Contacto sin nombre")}</h2><p class="text-xs text-slate-500">${inboxEsc(c.participant_id||"")} · ${inboxEsc(c.platform||"")}</p></div><div class="flex gap-2"><button class="btn btn-secondary text-xs" onclick="inboxCreateTicket()"><i class="fa-solid fa-ticket"></i> Crear ticket</button><button class="btn btn-secondary text-xs" onclick="inboxDraftAI()"><i class="fa-solid fa-wand-magic-sparkles"></i> Borrador IA</button></div></header><div id="inbox-messages" class="flex-1 p-4 md:p-6 space-y-3 overflow-y-auto bg-slate-950/50" style="max-height:58vh">${inboxState.messages.length?inboxState.messages.map(m=>`<div class="flex ${m.direction==='OUTBOUND'?'justify-end':'justify-start'}"><article class="max-w-[85%] rounded-2xl px-4 py-3 ${m.direction==='OUTBOUND'?'bg-indigo-600/25 border border-indigo-500/20':'bg-slate-900 border border-slate-800'}"><div class="text-sm whitespace-pre-wrap break-words">${inboxEsc(m.body||"(sin texto)")}</div><div class="text-[10px] text-slate-400/70 mt-2">${inboxEsc(m.sender_name||(m.direction==='OUTBOUND'?'Ceka':'Contacto'))} · ${inboxEsc(inboxFmt(m.created_at))} ${inboxEsc(m.status||"")}</div></article></div>`).join(""):'<div class="text-center text-sm text-slate-500 py-8">No hay mensajes.</div>'}</div><div class="p-3 border-t border-slate-800 space-y-2"><textarea id="inbox-reply" class="input min-h-24" maxlength="4000" placeholder="Escribí una respuesta…"></textarea><div class="flex justify-between items-center gap-2"><span class="text-[10px] text-slate-500">Solo se envía al presionar Enviar.</span><button class="btn btn-primary" onclick="inboxSendReply()"><i class="fa-solid fa-paper-plane"></i> Enviar</button></div></div>`;
-    const box=document.getElementById("inbox-messages");if(box)box.scrollTop=box.scrollHeight;
+    const borrador=conservar?(document.getElementById("inbox-reply")?.value||""):"";
+    if(!conservar)root.innerHTML='<div class="p-10 text-center text-slate-500 text-sm">Cargando mensajes…</div>';
+    try{
+      const r=await api(`/inbox/conversations/${encodeURIComponent(c.id)}/messages`);
+      const nuevos=Array.isArray(r?.data)?r.data:[];
+      const previos=inboxState.messages;
+      const cambio=nuevos.length!==previos.length||
+        nuevos.some((m,i)=>!previos[i]||previos[i].id!==m.id||previos[i].status!==m.status);
+      inboxState.messages=nuevos;
+      if(cambio||!conservar)inboxRenderThread(c,borrador);
+    }catch(e){if(!conservar)root.innerHTML=`<div class="p-5 text-rose-300">${inboxEsc(e.message)}</div>`;}
+  }
+  function inboxRenderThread(c,borrador){
+    const root=document.getElementById("inbox-thread");if(!root)return;
+    root.innerHTML=`<header class="p-4 border-b border-slate-800 flex flex-wrap justify-between gap-3 items-center"><div><h2 class="font-bold">${inboxEsc(c.participant_name||"Contacto sin nombre")}</h2><p class="text-xs text-slate-500">${inboxEsc(c.participant_id||"")} · ${inboxEsc(c.platform||"")}</p></div><div class="flex gap-2"><button class="btn btn-secondary text-xs" onclick="inboxCreateTicket()"><i class="fa-solid fa-ticket"></i> Crear ticket</button><button class="btn btn-secondary text-xs" onclick="inboxDraftAI()"><i class="fa-solid fa-wand-magic-sparkles"></i> Borrador IA</button></div></header><div id="inbox-messages" class="flex-1 p-4 space-y-3 overflow-y-auto bg-slate-950/50">${inboxState.messages.length?inboxState.messages.map(m=>`<div class="flex ${m.direction==='OUTBOUND'?'justify-end':'justify-start'}"><article class="max-w-[85%] rounded-2xl px-4 py-3 ${m.direction==='OUTBOUND'?'bg-indigo-600/25 border border-indigo-500/20':'bg-slate-900 border border-slate-800'}"><div class="text-sm whitespace-pre-wrap break-words">${inboxEsc(m.body||"(sin texto)")}</div><div class="text-[10px] text-slate-400/70 mt-2">${inboxEsc(m.sender_name||(m.direction==='OUTBOUND'?'Ceka':'Contacto'))} · ${inboxEsc(inboxFecha(m.created_at))} ${inboxEsc(m.status||"")}</div></article></div>`).join(""):'<div class="text-center text-sm text-slate-500 py-8">No hay mensajes.</div>'}</div><div class="p-3 border-t border-slate-800 space-y-2"><textarea id="inbox-reply" class="input min-h-20" maxlength="4000" placeholder="Escribí una respuesta…">${inboxEsc(borrador||"")}</textarea><div class="flex justify-between items-center gap-2"><span class="text-[10px] text-slate-500">Solo se envía al presionar Enviar.</span><button class="btn btn-primary" onclick="inboxSendReply()"><i class="fa-solid fa-paper-plane"></i> Enviar</button></div></div>`;
+    const box=document.getElementById("inbox-messages");
+    if(box)box.scrollTop=box.scrollHeight;
   }
   async function inboxSendReply(){const input=document.getElementById("inbox-reply"),text=input?.value.trim();if(!text||!inboxState.selectedId){notify("Escribí una respuesta antes de enviar.","warning");return;}if(!confirm("¿Enviar este mensaje por el canal conectado?"))return;try{await api(`/inbox/conversations/${encodeURIComponent(inboxState.selectedId)}/messages`,{method:"POST",body:{text}});notify("Respuesta enviada.");await inboxRefresh();}catch(e){notify(e.message||"No se pudo enviar.","error");}}
   function inboxCreateTicket(){
     const c=inboxState.conversations.find(x=>x.id===inboxState.selectedId),m=[...inboxState.messages].reverse().find(x=>x.direction==="INBOUND");if(!c||!m){notify("No hay mensaje entrante para convertir en ticket.","warning");return;}
     const opts=(state.clients||[]).map(x=>`<option value="${inboxEsc(x.id)}">${inboxEsc(x.name||x.legal_name||"Cliente")}</option>`).join("");if(!opts){notify("No hay clientes disponibles para asociar.","warning");return;}
-    const title=(m.body||"Consulta por mensajería").replace(/\\s+/g," ").slice(0,120);
+    const title=(m.body||"Consulta por mensajería").replace(/\s+/g," ").slice(0,120);
     openModal(`${modalHeader('fa-ticket','Crear ticket desde mensaje','Seleccioná el cliente correcto')}
-      <form class="p-5 space-y-4" onsubmit="inboxSubmitTicket(event)"><div><label class="text-xs text-slate-400">Cliente *</label><select id="inbox-ticket-client" class="input mt-1" required><option value="">Seleccioná…</option>${opts}</select></div><div><label class="text-xs text-slate-400">Asunto *</label><input id="inbox-ticket-subject" class="input mt-1" maxlength="180" required value="${inboxEsc(title)}"></div><div><label class="text-xs text-slate-400">Descripción</label><textarea id="inbox-ticket-description" class="input mt-1 min-h-32">Mensaje de ${inboxEsc(c.participant_name||c.participant_id||"contacto")}:\\n\\n${inboxEsc(m.body||"")}</textarea></div><div class="grid md:grid-cols-2 gap-3"><div><label class="text-xs text-slate-400">Prioridad</label><select id="inbox-ticket-priority" class="input mt-1"><option value="NORMAL">Normal</option><option value="HIGH">Alta</option><option value="URGENT">Crítica</option><option value="LOW">Baja</option></select></div><div><label class="text-xs text-slate-400">Categoría</label><input id="inbox-ticket-category" class="input mt-1" value="WhatsApp"></div></div><div class="flex justify-end gap-2"><button type="button" class="btn btn-secondary" onclick="closeModal()">Cancelar</button><button class="btn btn-primary">Crear ticket</button></div></form>`);
+      <form class="p-5 space-y-4" onsubmit="inboxSubmitTicket(event)"><div><label class="text-xs text-slate-400">Cliente *</label><select id="inbox-ticket-client" class="input mt-1" required><option value="">Seleccioná…</option>${opts}</select></div><div><label class="text-xs text-slate-400">Asunto *</label><input id="inbox-ticket-subject" class="input mt-1" maxlength="180" required value="${inboxEsc(title)}"></div><div><label class="text-xs text-slate-400">Descripción</label><textarea id="inbox-ticket-description" class="input mt-1 min-h-32">Mensaje de ${inboxEsc(c.participant_name||c.participant_id||"contacto")}:\n\n${inboxEsc(m.body||"")}</textarea></div><div class="grid md:grid-cols-2 gap-3"><div><label class="text-xs text-slate-400">Prioridad</label><select id="inbox-ticket-priority" class="input mt-1"><option value="NORMAL">Normal</option><option value="HIGH">Alta</option><option value="URGENT">Crítica</option><option value="LOW">Baja</option></select></div><div><label class="text-xs text-slate-400">Categoría</label><input id="inbox-ticket-category" class="input mt-1" value="WhatsApp"></div></div><div class="flex justify-end gap-2"><button type="button" class="btn btn-secondary" onclick="closeModal()">Cancelar</button><button class="btn btn-primary">Crear ticket</button></div></form>`);
   }
   async function inboxSubmitTicket(e){e.preventDefault();const b=e.submitter;try{b.disabled=true;const r=await api("/tickets",{method:"POST",body:{client_id:document.getElementById("inbox-ticket-client").value,subject:document.getElementById("inbox-ticket-subject").value.trim(),description:document.getElementById("inbox-ticket-description").value.trim(),priority:document.getElementById("inbox-ticket-priority").value,category:document.getElementById("inbox-ticket-category").value.trim()||"WhatsApp"}});closeModal();notify(`Ticket creado${r?.data?.ticket_number?": "+r.data.ticket_number:""}.`);await loadAll();}catch(err){notify(err.message||"No se pudo crear el ticket.","error");b.disabled=false;}}
-  function inboxDraftAI(){notify("La IA DeepSeek aún requiere configurar su clave privada en el backend. No se enviarán respuestas automáticas.","info");}
-  window.inboxRefresh=inboxRefresh;window.inboxRenderList=inboxRenderList;window.inboxSelect=inboxSelect;window.inboxSendReply=inboxSendReply;window.inboxCreateTicket=inboxCreateTicket;window.inboxSubmitTicket=inboxSubmitTicket;window.inboxDraftAI=inboxDraftAI;
+  async function inboxDraftAI(){
+    if(!inboxState.selectedId){notify("Elegí una conversación primero.","warning");return;}
+    const boton=event?.target?.closest?.("button");
+    if(boton){boton.disabled=true;boton.dataset.old=boton.innerHTML;boton.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> Generando…';}
+    try{
+      const r=await api(`/inbox/conversations/${encodeURIComponent(inboxState.selectedId)}/draft`,{method:"POST",body:{}});
+      const texto=(r?.data?.borrador||"").trim();
+      if(!texto){notify("La IA no devolvió texto.","warning");return;}
+      const area=document.getElementById("inbox-reply");
+      if(area){area.value=texto;area.focus();}
+      notify("Borrador generado. Revisalo antes de enviar.","info");
+    }catch(e){notify(e.message||"No se pudo generar el borrador.","error");}
+    finally{if(boton){boton.disabled=false;boton.innerHTML=boton.dataset.old||'<i class="fa-solid fa-wand-magic-sparkles"></i> Borrador IA';}}
+  }
+  window.inboxRefresh=inboxRefresh;window.inboxRenderList=inboxRenderList;window.inboxSelect=inboxSelect;window.inboxSendReply=inboxSendReply;window.inboxCreateTicket=inboxCreateTicket;window.inboxSubmitTicket=inboxSubmitTicket;window.inboxDraftAI=inboxDraftAI;window.inboxPararAuto=inboxPararAuto;
 
   async function boot() {
     addBackendChrome();
