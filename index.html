@@ -1661,11 +1661,10 @@ renderAll();
     if(!CM.token){el.className="px-3 py-2 rounded-xl text-xs border border-amber-700 bg-amber-950/40 text-amber-300";el.textContent="IA: iniciá sesión";return;}
     try{
       const r=await api("/inbox/ai-status"),d=r?.data||{};
-      const reciente=Number(d.ciclo_segundos)>=0&&Number(d.ciclo_segundos)<90;
-      const on=d.estado==="encendida"&&d.vigilante_activo&&reciente;
-      const encendida=d.estado==="encendida"&&d.vigilante_activo;
-      el.className=`px-3 py-2 rounded-xl text-xs border ${on?"border-emerald-700 bg-emerald-950/40 text-emerald-300":"border-rose-700 bg-rose-950/40 text-rose-300"}`;
-      el.textContent=on?`IA FUNCIONANDO · ${d.modelo||"modelo"} · ciclo hace ${d.ciclo_segundos}s`:encendida?`IA ENCENDIDA · vigilante sin ciclo reciente`:`IA APAGADA · ${d.detalle||d.estado||"sin estado"}`;
+      const on=d.estado==="encendida"&&d.vigilante_activo;
+      const warm=d.estado==="sin_ciclo";
+      el.className=`px-3 py-2 rounded-xl text-xs border ${on?"border-emerald-700 bg-emerald-950/40 text-emerald-300":warm?"border-amber-700 bg-amber-950/40 text-amber-300":"border-rose-700 bg-rose-950/40 text-rose-300"}`;
+      el.textContent=on?`IA FUNCIONANDO · ${d.modelo||"modelo"} · ciclo hace ${d.ciclo_segundos}s`:warm?"IA ENCENDIDA · esperando primera respuesta":`IA APAGADA · ${d.detalle||d.estado||"sin estado"}`;
       el.title=`Estado: ${d.estado}. Último ciclo: ${d.ultimo_ciclo||"sin dato"}. Último envío: ${d.ultimo_envio||"sin dato"}. Último error: ${d.ultimo_error||"ninguno"}. Detalle: ${d.detalle||""}`;
     }catch(e){el.className="px-3 py-2 rounded-xl text-xs border border-amber-700 bg-amber-950/40 text-amber-300";el.textContent="IA: estado no disponible";el.title=e.message||"Error consultando estado";}
   }
