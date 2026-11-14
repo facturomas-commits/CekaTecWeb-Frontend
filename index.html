@@ -267,7 +267,7 @@
     <section id="sec-inbox" class="view hidden space-y-5">
       <div class="flex flex-col md:flex-row justify-between gap-3 items-start md:items-center">
         <div><h1 class="text-2xl font-extrabold">Inbox de mensajes</h1><p class="text-sm text-slate-400">Conversaciones de WhatsApp y otros canales conectados a Zernio.</p></div>
-        <button class="btn btn-secondary" onclick="inboxRefresh()"><i class="fa-solid fa-rotate"></i> Actualizar</button>
+        <div class="flex flex-wrap gap-2 items-center"><div id="inbox-ai-status" class="px-3 py-2 rounded-xl text-xs border border-slate-700 bg-slate-900 text-slate-400" role="status">IA: verificando…</div><button class="btn btn-secondary" onclick="inboxRefresh()"><i class="fa-solid fa-rotate"></i> Actualizar</button></div>
       </div>
       <div class="inbox-grid">
         <div class="panel rounded-2xl overflow-hidden flex flex-col inbox-col-list">
@@ -1655,7 +1655,21 @@ renderAll();
   window.inboxDraftAI=()=>{};
 
   // Inbox Zernio: conversaciones, tickets y borradores asistidos.
-  const inboxState={conversations:[],selectedId:"",messages:[],stamp:"",timer:null,busy:false};
+  const inboxState={conversations:[],selectedId:"",messages:[],stamp:"",timer:null,busy:false,aiTimer:null};
+  async function inboxAIStatus(){
+    const el=document.getElementById("inbox-ai-status");if(!el)return;
+    if(!CM.token){el.className="px-3 py-2 rounded-xl text-xs border border-amber-700 bg-amber-950/40 text-amber-300";el.textContent="IA: iniciá sesión";return;}
+    try{
+      const r=await api("/inbox/ai-status"),d=r?.data||{};
+      const reciente=Number(d.ciclo_segundos)>=0&&Number(d.ciclo_segundos)<90;
+      const on=d.estado==="encendida"&&d.vigilante_activo&&reciente;
+      const encendida=d.estado==="encendida"&&d.vigilante_activo;
+      el.className=`px-3 py-2 rounded-xl text-xs border ${on?"border-emerald-700 bg-emerald-950/40 text-emerald-300":"border-rose-700 bg-rose-950/40 text-rose-300"}`;
+      el.textContent=on?`IA FUNCIONANDO · ${d.modelo||"modelo"} · ciclo hace ${d.ciclo_segundos}s`:encendida?`IA ENCENDIDA · vigilante sin ciclo reciente`:`IA APAGADA · ${d.detalle||d.estado||"sin estado"}`;
+      el.title=`Estado: ${d.estado}. Último ciclo: ${d.ultimo_ciclo||"sin dato"}. Último envío: ${d.ultimo_envio||"sin dato"}. Último error: ${d.ultimo_error||"ninguno"}. Detalle: ${d.detalle||""}`;
+    }catch(e){el.className="px-3 py-2 rounded-xl text-xs border border-amber-700 bg-amber-950/40 text-amber-300";el.textContent="IA: estado no disponible";el.title=e.message||"Error consultando estado";}
+  }
+  function inboxAIStatusStart(){inboxAIStatus();if(inboxState.aiTimer)clearInterval(inboxState.aiTimer);inboxState.aiTimer=setInterval(inboxAIStatus,15000);}
   const inboxEsc=(v)=>esc(v);
   // Zernio devuelve "-03"; JS necesita "-03:00" para no dar Invalid Date.
   const inboxFecha=(v)=>{
@@ -1667,6 +1681,7 @@ renderAll();
   };
   const inboxFmt=inboxFecha;
   async function inboxRefresh(){
+    inboxAIStatusStart();
     const root=document.getElementById("inbox-list");
     if(!CM.token){if(root)root.innerHTML='<div class="p-5 text-sm text-amber-300">Iniciá sesión para ver las conversaciones.</div>';return;}
     if(root&&!inboxState.conversations.length)root.innerHTML='<div class="p-5 text-sm text-slate-500">Cargando conversaciones…</div>';
