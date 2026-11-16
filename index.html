@@ -66,6 +66,24 @@
 </head>
 
 <body class="bg-slate-950 text-slate-100 min-h-screen">
+<script>
+// Ocultar desde el primer render las opciones restringidas si hay sesión de portal guardada.
+try {
+  const u = JSON.parse(localStorage.getItem('cm_user') || 'null');
+  if (u && u.client_id) {
+    document.documentElement.classList.add('cm-client-portal');
+  }
+} catch (_) {}
+</script>
+<style>
+.cm-client-portal .nav-btn[data-section="clientes"],
+.cm-client-portal .nav-btn[data-section="pipeline"],
+.cm-client-portal .nav-btn[data-section="inventario"],
+.cm-client-portal .nav-btn[data-section="finanzas"],
+.cm-client-portal .nav-btn[data-section="configuracion"],
+.cm-client-portal .nav-btn[data-section="usuarios"],
+.cm-client-portal .nav-btn[data-section="inbox"] { display:none !important; }
+</style>
 <div id="app" class="min-h-screen">
 
 <!-- MOBILE OVERLAY -->
@@ -394,6 +412,8 @@ function showToast(message,type='success'){
 }
 
 function navigate(section){
+  const user = window.CoreManagerAPI?.config?.user;
+  if(user?.client_id && ['clientes','pipeline','inventario','finanzas','configuracion','usuarios','inbox'].includes(section)) section='dashboard';
   currentSection=section;
   document.querySelectorAll('.view').forEach(v=>v.classList.add('hidden'));
   const target=document.getElementById('sec-'+section);
@@ -942,6 +962,17 @@ renderAll();
     initialized: false
   };
 
+  // Ocultar de inmediato la navegación restringida si se restaura sesión localmente.
+  try {
+    const usuarioInicial = JSON.parse(localStorage.getItem("cm_user") || "null");
+    if(usuarioInicial?.client_id) {
+      ["clientes","pipeline","inventario","finanzas","configuracion","usuarios","inbox"].forEach(s => {
+        const b = document.querySelector('.nav-btn[data-section="' + s + '"]');
+        if(b) b.style.display = "none";
+      });
+    }
+  } catch (_) {}
+
   const enumMap = {
     clientType: {CLIENT:"Cliente", PROSPECT:"Prospecto", COMPANY:"Cliente", PERSON:"Cliente"},
     clientStatus: {ACTIVE:"Activo", INACTIVE:"Inactivo", PROSPECT:"Prospecto", BLOCKED:"Bloqueado"},
@@ -1053,6 +1084,7 @@ renderAll();
     CM.token = "";
     CM.refresh = "";
     CM.user = null;
+    document.documentElement.classList.remove('cm-client-portal');
     localStorage.removeItem("access_token");
     localStorage.removeItem("refresh_token");
     localStorage.removeItem("cm_user");
@@ -1807,6 +1839,8 @@ renderAll();
       const me=await api("/auth/me");
       CM.user=me.data;
       localStorage.setItem("cm_user",JSON.stringify(CM.user));
+      if(CM.user?.client_id) document.documentElement.classList.add('cm-client-portal');
+      else document.documentElement.classList.remove('cm-client-portal');
       await loadAll();
       CM.initialized=true;
     } catch(e) {
