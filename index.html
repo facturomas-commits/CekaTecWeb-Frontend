@@ -2785,7 +2785,6 @@ renderAll();
 
   function aplicar(){
     const u = usuarioPortal();
-    if(u) { inboxPararAuto(); if(inboxState.aiTimer){clearInterval(inboxState.aiTimer);inboxState.aiTimer=null;} }
     const sesion = CM().user;
     const clave = (u ? ("portal:" + u.client_id) : "interno") +
                   ":" + (sesion ? sesion.id : "sin-sesion");
@@ -2945,10 +2944,7 @@ renderAll();
   // Bloquear navegacion a secciones internas desde el portal
   const navigateOriginal = window.navigate;
   window.navigate = function(section){
-    if(usuarioPortal() && SECCIONES_OCULTAS.indexOf(section) >= 0) {
-      if(section === "inbox") { inboxPararAuto(); if(inboxState.aiTimer){clearInterval(inboxState.aiTimer);inboxState.aiTimer=null;} }
-      section = "dashboard";
-    }
+    if(usuarioPortal() && SECCIONES_OCULTAS.indexOf(section) >= 0) section = "dashboard";
     const r = navigateOriginal(section);
     if(section === "usuarios") setTimeout(() => window.renderUsuarios && window.renderUsuarios(), 80);
     return r;
