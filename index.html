@@ -189,24 +189,24 @@ try {
           <div id="finance-chart" class="h-56 flex items-end gap-3 md:gap-6"></div>
           <div class="flex justify-center gap-5 text-[11px] text-slate-500 mt-4"><span><i class="fa-solid fa-square text-indigo-500 mr-1"></i>Ingresos</span><span><i class="fa-solid fa-square text-slate-600 mr-1"></i>Gastos</span></div>
         </div>
-        <div class="panel rounded-2xl p-5">
+        <div id="dashboard-attention" class="panel rounded-2xl p-5">
           <div class="flex items-center justify-between mb-4"><div><h2 class="font-bold">Requiere atención</h2><p class="text-xs text-slate-500">Prioridades operativas</p></div><span class="text-xs bg-rose-500/10 text-rose-300 px-2 py-1 rounded-lg">8</span></div>
           <div id="attention-list" class="space-y-2"></div>
         </div>
       </div>
 
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <div class="panel rounded-2xl p-5">
+        <div id="dashboard-recent-services" class="panel rounded-2xl p-5">
           <div class="flex justify-between items-center mb-4"><h2 class="font-bold"><i class="fa-solid fa-clock-rotate-left text-indigo-400 mr-2"></i>Últimas atenciones</h2><button class="text-xs text-indigo-400" onclick="navigate('servicios')">Ver todas</button></div>
           <div id="recent-services" class="space-y-2"></div>
         </div>
-        <div class="panel rounded-2xl p-5">
+        <div id="dashboard-upcoming-followups" class="panel rounded-2xl p-5">
           <div class="flex justify-between items-center mb-4"><h2 class="font-bold"><i class="fa-regular fa-calendar text-amber-400 mr-2"></i>Próximos seguimientos</h2><button class="text-xs text-indigo-400" onclick="navigate('clientes')">CRM</button></div>
           <div id="upcoming-followups" class="space-y-2"></div>
         </div>
       </div>
 
-      <div class="panel rounded-2xl p-5">
+      <div id="dashboard-activity" class="panel rounded-2xl p-5">
         <div class="flex items-center justify-between mb-4"><div><h2 class="font-bold">Actividad reciente</h2><p class="text-xs text-slate-500">Últimos eventos del sistema</p></div><button class="btn btn-secondary text-xs" onclick="showToast('Auditoría completa disponible en la versión backend','info')"><i class="fa-solid fa-list"></i> Auditoría</button></div>
         <div id="activity-feed" class="grid md:grid-cols-2 xl:grid-cols-4 gap-3"></div>
       </div>
@@ -2830,6 +2830,10 @@ renderAll();
     if(kpiClientes) kpiClientes.style.display = u ? "none" : "";
     const graficoFinanzas = document.getElementById("dashboard-finance-chart");
     if(graficoFinanzas) graficoFinanzas.style.display = u ? "none" : "";
+    ["dashboard-attention","dashboard-recent-services","dashboard-upcoming-followups","dashboard-activity"].forEach(id => {
+      const el = document.getElementById(id);
+      if(el) el.style.display = u ? "none" : "";
+    });
 
     // Mostrar/ocultar secciones segun el tipo de usuario
     SECCIONES_OCULTAS.forEach(s => {
