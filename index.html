@@ -82,7 +82,8 @@ try {
 .cm-client-portal .nav-btn[data-section="finanzas"],
 .cm-client-portal .nav-btn[data-section="configuracion"],
 .cm-client-portal .nav-btn[data-section="usuarios"],
-.cm-client-portal .nav-btn[data-section="inbox"] { display:none !important; }
+.cm-client-portal .nav-btn[data-section="inbox"],
+.cm-client-portal .nav-btn[data-section="reportes"] { display:none !important; }
 </style>
 <div id="app" class="min-h-screen">
 
@@ -2808,7 +2809,7 @@ renderAll();
   const CM = () => window.CoreManagerAPI.config;
   const api = (p, o) => window.CoreManagerAPI.api(p, o);
 
-  const SECCIONES_OCULTAS = ["clientes", "pipeline", "inventario", "finanzas", "configuracion", "usuarios", "inbox"];
+  const SECCIONES_OCULTAS = ["clientes", "pipeline", "inventario", "finanzas", "configuracion", "usuarios", "inbox", "reportes"];
   const PRIORIDADES = {"Baja":"LOW", "Normal":"NORMAL", "Alta":"HIGH", "Crítica":"URGENT"};
   let ultimaClave = "";
 
