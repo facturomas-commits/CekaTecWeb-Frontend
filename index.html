@@ -3089,6 +3089,7 @@ renderAll();
   const esc = v => escapeHTML(String(v ?? ""));
 
   window.initUsuariosUI = function(){
+    if(!window.CoreManagerAPI?.hasPermission('ADMIN_USERS')) return;
     if(document.getElementById("nav-usuarios")) return;
     const contenedorNav = document.querySelector('.nav-btn[data-section="configuracion"]')?.parentElement;
     const main = document.querySelector(".main-content");
@@ -3249,6 +3250,12 @@ renderAll();
     const wrap = document.getElementById("us-client-wrap");
     if(wrap) wrap.classList.toggle("hidden", ROLES_PORTAL.indexOf(rol) < 0);
   };
+
+  // Este script se evalúa después del arranque inicial. Si el administrador ya
+  // inició sesión, crear la navegación ahora (no esperar a otro login/boot).
+  if(window.CoreManagerAPI?.config?.user && !window.CoreManagerAPI.config.user.client_id){
+    window.initUsuariosUI();
+  }
 
   window.saveUserForm = async function(e){
     e.preventDefault();
