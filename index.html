@@ -1602,6 +1602,35 @@ renderAll();
   };
 
   /* --------- Login UI --------- */
+  function passwordInput(id, autocomplete='current-password') {
+    return `<div class="relative mt-1"><input id="${id}" type="password" class="input pr-11" autocomplete="${autocomplete}" required><button type="button" class="absolute inset-y-0 right-0 px-3 text-slate-400 hover:text-white" aria-label="Mostrar contraseña" onclick="togglePassword('${id}',this)"><i class="fa-solid fa-eye"></i></button></div>`;
+  }
+
+  window.togglePassword=function(id, boton){
+    const input=document.getElementById(id);if(!input)return;
+    const mostrar=input.type==='password';input.type=mostrar?'text':'password';
+    const icono=boton?.querySelector('i');if(icono)icono.className=mostrar?'fa-solid fa-eye-slash':'fa-solid fa-eye';
+    if(boton)boton.setAttribute('aria-label',mostrar?'Ocultar contraseña':'Mostrar contraseña');
+  };
+
+  function showForcedPasswordChange(passwordActual) {
+    let el=document.getElementById('cm-password-change-overlay');
+    if(el)el.remove();
+    el=document.createElement('div');
+    el.id='cm-password-change-overlay';
+    el.className='fixed inset-0 z-[10000] bg-slate-950 flex items-center justify-center p-4';
+    el.innerHTML=`<div class="w-full max-w-md"><form id="cm-password-change-form" class="panel rounded-2xl p-6 space-y-4"><div class="text-center"><div class="w-14 h-14 mx-auto rounded-2xl bg-amber-500/15 text-amber-300 flex items-center justify-center"><i class="fa-solid fa-lock text-xl"></i></div><h2 class="text-xl font-black mt-4">Cambiá tu contraseña</h2><p class="text-sm text-slate-400 mt-1">Por seguridad, debes cambiar la contraseña temporal antes de continuar.</p></div><div><label class="text-xs text-slate-400">Nueva contraseña</label>${passwordInput('cm-new-password','new-password')}</div><div><label class="text-xs text-slate-400">Repetir nueva contraseña</label>${passwordInput('cm-confirm-password','new-password')}</div><div id="cm-password-change-error" class="hidden rounded-xl p-3 bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs"></div><button id="cm-password-change-button" class="btn btn-primary w-full py-3"><i class="fa-solid fa-check"></i> Guardar nueva contraseña</button></form></div>`;
+    document.body.appendChild(el);
+    document.getElementById('cm-password-change-form').addEventListener('submit',async ev=>{
+      ev.preventDefault();const nueva=document.getElementById('cm-new-password').value;const confirma=document.getElementById('cm-confirm-password').value;const err=document.getElementById('cm-password-change-error');const btn=document.getElementById('cm-password-change-button');err.classList.add('hidden');
+      if(nueva.length<8||nueva!==confirma){err.textContent=nueva.length<8?'La contraseña debe tener al menos 8 caracteres.':'Las contraseñas no coinciden.';err.classList.remove('hidden');return;}
+      btn.disabled=true;btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> Guardando...';
+      try{await api('/auth/change-password',{method:'POST',body:{password_actual:passwordActual,password_nueva:nueva}});CM.user.must_change_password=false;localStorage.setItem('cm_user',JSON.stringify(CM.user));el.remove();await boot();}
+      catch(e){err.textContent=e.message||'No se pudo cambiar la contraseña.';err.classList.remove('hidden');}
+      finally{btn.disabled=false;btn.innerHTML='<i class="fa-solid fa-check"></i> Guardar nueva contraseña';}
+    });
+  }
+
   function showLogin() {
     let el=document.getElementById("cm-login-overlay");
     if(!el){
@@ -1621,7 +1650,7 @@ renderAll();
               <input id="cm-login-email" type="email" class="input mt-1" placeholder="tu@empresa.com" autocomplete="username" required>
             </div>
             <div><label class="text-xs text-slate-400">Contraseña</label>
-              <input id="cm-login-password" type="password" class="input mt-1" value="" required>
+              ${passwordInput('cm-login-password')}
             </div>
             <div id="cm-login-error" class="hidden rounded-xl p-3 bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs"></div>
             <button id="cm-login-button" class="btn btn-primary w-full py-3"><i class="fa-solid fa-right-to-bracket"></i> Ingresar</button>
@@ -1636,12 +1665,14 @@ renderAll();
         err.classList.add("hidden");
         btn.disabled=true;btn.innerHTML='<i class="fa-solid fa-spinner fa-spin"></i> Conectando...';
         try {
-          await login(
+          const password=document.getElementById("cm-login-password").value;
+          const sesion=await login(
             document.getElementById("cm-login-email").value.trim(),
-            document.getElementById("cm-login-password").value
+            password
           );
           el.remove();
-          await boot();
+          if(sesion.user?.must_change_password) showForcedPasswordChange(password);
+          else await boot();
         } catch(e) {
           err.textContent=e.message || "No fue posible iniciar sesión.";
           err.classList.remove("hidden");
