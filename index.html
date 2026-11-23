@@ -2956,6 +2956,7 @@ renderAll();
       // Pantalla de usuarios (equipo interno + accesos al portal)
       try{ window.initUsuariosUI && window.initUsuariosUI(); }catch(e){ console.warn("[usuarios]", e); }
     }
+    if(u) try{ window.initClientProfileUI && window.initClientProfileUI(); }catch(e){ console.warn('[perfil cliente]',e); }
   }
 
   // El nombre del cliente no se puede resolver con /clients (bloqueado en el portal)
@@ -3313,6 +3314,24 @@ renderAll();
       if(boton) boton.disabled = false;
     }
   };
+})();
+</script>
+
+<script>
+/* Perfil editable del portal: únicamente datos de contacto permitidos. */
+(() => {
+  const api=(p,o)=>window.CoreManagerAPI.api(p,o);
+  const esc=v=>escapeHTML(String(v??''));
+  window.initClientProfileUI=function(){
+    const u=window.CoreManagerAPI?.config?.user;if(!u?.client_id||document.getElementById('nav-mi-empresa'))return;
+    const ref=document.querySelector('.nav-btn[data-section="configuracion"]');const parent=ref?.parentElement;const main=document.querySelector('.main-content');if(!parent||!main)return;
+    const btn=document.createElement('button');btn.id='nav-mi-empresa';btn.className='nav-btn w-full text-left px-3 py-2.5 rounded-xl flex items-center gap-3';btn.dataset.section='mi-empresa';btn.innerHTML='<i class="fa-solid fa-building-user w-5"></i><span>Mi empresa</span>';btn.onclick=()=>navigate('mi-empresa');parent.insertBefore(btn,ref);
+    const sec=document.createElement('section');sec.id='sec-mi-empresa';sec.className='view hidden space-y-5';sec.innerHTML='<div><h1 class="text-2xl font-extrabold">Mi empresa</h1><p class="text-sm text-slate-400">Actualiza únicamente tus datos de contacto.</p></div><div id="client-profile-box" class="panel rounded-2xl p-6 max-w-3xl">Cargando…</div>';main.appendChild(sec);
+  };
+  window.renderClientProfile=async function(){const box=document.getElementById('client-profile-box');const u=window.CoreManagerAPI.config.user;if(!box||!u?.client_id)return;try{const r=await api('/clients/'+u.client_id);const c=r.data||{};box.innerHTML='<form class="space-y-4" onsubmit="saveClientProfile(event)"><div class="grid md:grid-cols-2 gap-3"><div><label class="text-xs text-slate-400">Razón social</label><input class="input mt-1 opacity-60" value="'+esc(c.legal_name)+'" disabled></div><div><label class="text-xs text-slate-400">CUIT</label><input class="input mt-1 opacity-60" value="'+esc(c.tax_id)+'" disabled></div>'+field('Email','cp-email',c.email||'','email',false)+field('Teléfono','cp-phone',c.phone||'','text',false)+field('WhatsApp / móvil','cp-mobile',c.mobile||'','text',false)+field('Dirección','cp-address',c.address||'','text',false)+field('Ciudad','cp-city',c.city||'','text',false)+field('Provincia','cp-province',c.province||'','text',false)+field('Código postal','cp-postal',c.postal_code||'','text',false)+'</div><div class="flex justify-end"><button class="btn btn-primary"><i class="fa-solid fa-check"></i> Guardar datos</button></div></form>';}catch(e){box.innerHTML='<div class="text-rose-300">'+esc(e.message||'No se pudo cargar el perfil')+'</div>';}};
+  window.saveClientProfile=async function(e){e.preventDefault();const b=e.submitter;if(b)b.disabled=true;try{await api('/client-profile',{method:'PUT',body:{email:document.getElementById('cp-email').value.trim(),phone:document.getElementById('cp-phone').value.trim(),mobile:document.getElementById('cp-mobile').value.trim(),address:document.getElementById('cp-address').value.trim(),city:document.getElementById('cp-city').value.trim(),province:document.getElementById('cp-province').value.trim(),postal_code:document.getElementById('cp-postal').value.trim()}});showToast('Datos de contacto actualizados','success');await renderClientProfile();}catch(err){showToast(err.message||'No se pudo guardar','error');}finally{if(b)b.disabled=false;}};
+  const nav=window.navigate;window.navigate=function(section){const r=nav(section);if(section==='mi-empresa')setTimeout(()=>window.renderClientProfile(),50);return r;};
+  if(window.CoreManagerAPI?.config?.user?.client_id)window.initClientProfileUI();
 })();
 </script>
 
