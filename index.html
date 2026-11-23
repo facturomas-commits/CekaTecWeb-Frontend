@@ -3533,6 +3533,7 @@ renderAll();
   const api = (p, o) => window.CoreManagerAPI.api(p, o);
 
   async function cargarTecnicos(){
+    if(!window.CoreManagerAPI.hasPermission('ADMIN_USERS')){CM().tecnicos=[];return;}
     try{
       const r = await api("/users?role=TECHNICIAN&page=1&limit=100");
       CM().tecnicos = Array.isArray(r.data) ? r.data : [];
