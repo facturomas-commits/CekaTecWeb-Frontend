@@ -3116,7 +3116,7 @@ renderAll();
         '<thead class="bg-slate-900 text-[10px] uppercase text-slate-500"><tr>' +
           '<th class="text-left p-4">Usuario</th><th class="text-left p-4">Nombre</th>' +
           '<th class="text-left p-4">Email</th><th class="text-left p-4">Rol</th>' +
-          '<th class="text-left p-4">Cliente</th><th class="text-left p-4">Estado</th>' +
+          '<th class="text-left p-4">Cliente</th><th class="text-left p-4">Estado</th><th class="text-right p-4">Acciones</th>' +
         '</tr></thead><tbody id="users-body"></tbody></table></div></div>';
     main.appendChild(seccion);
   };
@@ -3124,7 +3124,7 @@ renderAll();
   window.renderUsuarios = async function(){
     const body = document.getElementById("users-body");
     if(!body) return;
-    body.innerHTML = '<tr><td colspan="6" class="p-6 text-center text-slate-500">Cargando…</td></tr>';
+    body.innerHTML = '<tr><td colspan="7" class="p-6 text-center text-slate-500">Cargando…</td></tr>';
     try{
       const [users] = await Promise.all([
         api("/users?page=1&limit=200")
@@ -3132,7 +3132,7 @@ renderAll();
       cacheUsuarios = Array.isArray(users.data) ? users.data : [];
 
       if(!cacheUsuarios.length){
-        body.innerHTML = '<tr><td colspan="6" class="p-6 text-center text-slate-500">Sin usuarios.</td></tr>';
+        body.innerHTML = '<tr><td colspan="7" class="p-6 text-center text-slate-500">Sin usuarios.</td></tr>';
         return;
       }
       body.innerHTML = cacheUsuarios.map(u => {
@@ -3147,12 +3147,37 @@ renderAll();
             esc(rolesUsuario.map(rolNombre).join(", ") || "—") + '</span></td>' +
           '<td class="p-4 text-xs">' + (esPortal ? esc(u.client_name || u.client_id) : '<span class="text-slate-600">Interno</span>') + '</td>' +
           '<td class="p-4 text-xs ' + (u.is_active ? "text-emerald-300" : "text-slate-500") + '">' + (u.is_active ? "Activo" : "Inactivo") + '</td>' +
+          '<td class="p-4 text-right whitespace-nowrap"><button class="btn btn-secondary !p-2 text-xs" title="Editar usuario" onclick="openEditUserModal(\'' + u.id + '\')"><i class="fa-solid fa-pen"></i></button> <button class="btn btn-secondary !p-2 text-xs" title="Cambiar contraseña" onclick="openResetUserPassword(\'' + u.id + '\')"><i class="fa-solid fa-key"></i></button></td>' +
         '</tr>';
       }).join("");
     }catch(e){
-      body.innerHTML = '<tr><td colspan="6" class="p-6 text-center" style="color:#fda4af">' + esc(e.message || "Error") + '</td></tr>';
+      body.innerHTML = '<tr><td colspan="7" class="p-6 text-center" style="color:#fda4af">' + esc(e.message || "Error") + '</td></tr>';
     }
   };
+
+  window.openEditUserModal = function(userId){
+    const u=cacheUsuarios.find(x=>x.id===userId);
+    if(!u){showToast('Usuario no encontrado','error');return;}
+    const roles=Array.isArray(u.roles)?u.roles:String(u.roles||'').split(',').filter(Boolean);
+    const rol=roles[0]||'VIEWER';
+    const opcionesRol=Object.keys(NOMBRE_ROL).map(c=>'<option value="'+c+'" '+(c===rol?'selected':'')+'>'+esc(rolNombre(c))+'</option>').join('');
+    openModal(modalHeader('fa-user-pen','Editar usuario',u.username)+
+      '<form class="p-5 space-y-4" onsubmit="saveEditUser(event,\''+u.id+'\')"><div class="grid md:grid-cols-2 gap-3">'+
+      field('Email','eu-email',u.email||'','email',true)+field('Nombre','eu-first',u.first_name||'','text',true)+field('Apellido','eu-last',u.last_name||'','text',true)+field('Teléfono','eu-phone',u.phone||'','text',false)+
+      '<div><label class="text-xs text-slate-400">Rol</label><select id="eu-role" class="input mt-1">'+opcionesRol+'</select></div><div><label class="text-xs text-slate-400">Estado</label><select id="eu-active" class="input mt-1"><option value="true" '+(u.is_active?'selected':'')+'>Activo</option><option value="false" '+(!u.is_active?'selected':'')+'>Inactivo</option></select></div></div><div class="flex justify-end gap-2"><button type="button" class="btn btn-secondary" onclick="closeModal()">Cancelar</button><button class="btn btn-primary">Guardar cambios</button></div></form>');
+  };
+
+  window.saveEditUser=async function(e,userId){
+    e.preventDefault();const b=e.submitter;if(b)b.disabled=true;
+    try{const u=cacheUsuarios.find(x=>x.id===userId);await api('/users/'+userId,{method:'PUT',body:{email:document.getElementById('eu-email').value.trim(),first_name:document.getElementById('eu-first').value.trim(),last_name:document.getElementById('eu-last').value.trim(),phone:document.getElementById('eu-phone').value.trim(),mobile:u?.mobile||'',is_active:document.getElementById('eu-active').value==='true',must_change_password:!!u?.must_change_password,roles:[document.getElementById('eu-role').value]}});closeModal();await renderUsuarios();showToast('Usuario actualizado','success');}catch(err){showToast(err.message||'No se pudo actualizar','error');}finally{if(b)b.disabled=false;}
+  };
+
+  window.openResetUserPassword=function(userId){
+    const u=cacheUsuarios.find(x=>x.id===userId);if(!u)return;
+    openModal(modalHeader('fa-key','Cambiar contraseña',u.username)+'<form class="p-5 space-y-4" onsubmit="resetUserPassword(event,\''+userId+'\')"><div><label class="text-xs text-slate-400">Nueva contraseña temporal</label><div class="relative mt-1"><input id="ru-pass" type="password" class="input pr-11" minlength="8" required><button type="button" class="absolute inset-y-0 right-0 px-3 text-slate-400" onclick="togglePassword(\'ru-pass\',this)"><i class="fa-solid fa-eye"></i></button></div></div><p class="text-xs text-slate-500">El usuario deberá cambiarla al iniciar sesión.</p><div class="flex justify-end gap-2"><button type="button" class="btn btn-secondary" onclick="closeModal()">Cancelar</button><button class="btn btn-primary">Cambiar contraseña</button></div></form>');
+  };
+
+  window.resetUserPassword=async function(e,userId){e.preventDefault();const b=e.submitter;if(b)b.disabled=true;try{await api('/users/'+userId+'/reset-password',{method:'POST',body:{password:document.getElementById('ru-pass').value}});closeModal();showToast('Contraseña temporal actualizada','success');}catch(err){showToast(err.message||'No se pudo cambiar la contraseña','error');}finally{if(b)b.disabled=false;}};
 
   window.openClientAccessModal = function(clientId){
     if(!hasPermission('ADMIN_USERS')){
@@ -3798,9 +3823,9 @@ renderAll();
               '<td class="p-3 text-right"><button class="btn btn-secondary !p-2 text-xs" title="Enviar recibo" onclick="enviarRecibo(\'' + p.id + '\')">' +
               '<i class="fa-solid fa-paper-plane"></i></button></td></tr>';
           }).join("")
-        : '<tr><td colspan="6" class="p-6 text-center text-xs text-slate-500">Todavía no hay cobros registrados.</td></tr>';
+        : '<tr><td colspan="7" class="p-6 text-center text-xs text-slate-500">Todavía no hay cobros registrados.</td></tr>';
     }catch(e){
-      body.innerHTML = '<tr><td colspan="6" class="p-6 text-center text-xs" style="color:#fda4af">' + escapeHTML(e.message || "Error") + '</td></tr>';
+      body.innerHTML = '<tr><td colspan="7" class="p-6 text-center text-xs" style="color:#fda4af">' + escapeHTML(e.message || "Error") + '</td></tr>';
     }
   }
   window.renderPagos = renderPagos;
