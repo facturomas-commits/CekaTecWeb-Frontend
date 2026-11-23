@@ -1672,7 +1672,10 @@ renderAll();
           );
           el.remove();
           if(sesion.user?.must_change_password) showForcedPasswordChange(password);
-          else await boot();
+          else {
+            try { await boot(); }
+            catch(e) { console.error('[login boot]',e); showToast(e.message || 'La sesión inició, pero no se pudieron cargar algunos datos.', 'error'); }
+          }
         } catch(e) {
           err.textContent=e.message || "No fue posible iniciar sesión.";
           err.classList.remove("hidden");
@@ -1866,16 +1869,28 @@ renderAll();
 
   async function boot() {
     addBackendChrome();
+    // Solo una sesión realmente inválida debe volver al login. Un fallo de carga
+    // o de render no debe expulsar al usuario ni producir el efecto de "se cierra".
+    let me;
     try {
-      const me=await api("/auth/me");
-      CM.user=me.data;
-      localStorage.setItem("cm_user",JSON.stringify(CM.user));
-      if(CM.user?.client_id) document.documentElement.classList.add('cm-client-portal');
-      else document.documentElement.classList.remove('cm-client-portal');
+      me=await api("/auth/me");
+    } catch(e) {
+      if(e.status===401){ await logout(false); return; }
+      console.error('[boot auth]',e);
+      throw e;
+    }
+    CM.user=me.data;
+    localStorage.setItem("cm_user",JSON.stringify(CM.user));
+    if(CM.user?.client_id) document.documentElement.classList.add('cm-client-portal');
+    else document.documentElement.classList.remove('cm-client-portal');
+    try {
       await loadAll();
       CM.initialized=true;
     } catch(e) {
-      logout(false);
+      console.error('[boot load]',e);
+      CM.initialized=true;
+      updateBackendIndicators();
+      showToast('La sesión está abierta, pero algunos datos no pudieron cargarse.', 'error');
     }
   }
 
